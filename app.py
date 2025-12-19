@@ -26,5 +26,4 @@ def get_images():
     return jsonify(images)
 
 if __name__ == '__main__':
-    # Host='0.0.0.0' macht den Server im lokalen Netzwerk verfügbar
     app.run(host='0.0.0.0', port=6001, debug=True)
