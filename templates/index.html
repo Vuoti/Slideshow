@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bilderrahmen</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden; /* Keine Scrollbalken */
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Wir nutzen zwei Bild-Container für weiche Übergänge */
+        #img1, #img2 {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* Bild wird nicht verzerrt */
+            transition: opacity 1.5s ease-in-out; /* Weicher Übergang */
+        }
+
+        .hidden {
+            opacity: 0;
+        }
+        
+        .visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <img id="img1" class="visible" src="" />
+    <img id="img2" class="hidden" src="" />
+
+    <script>
+        var imageList = [];
+        var currentIndex = 0;
+        var activeContainer = 1; // Welches img Tag ist gerade sichtbar? 1 oder 2
+        var duration = 10000; // Anzeigedauer pro Bild in ms (hier 10 Sekunden)
+
+        // 1. Liste der Bilder vom Server holen
+        function fetchImageList() {
+            var xhr = new XMLHttpRequest();
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    var newImages = JSON.parse(xhr.responseText);
+                    
+                    // Optional: Prüfen ob sich was geändert hat, hier simpel überschreiben
+                    if (newImages.length > 0) {
+                        imageList = newImages;
+                    }
+                }
+            };
+            xhr.open("GET", "/api/images", true);
+            xhr.send();
+        }
+
+        // 2. Das nächste Bild anzeigen (mit Überblendung)
+        function showNextImage() {
+            if (imageList.length === 0) return;
+
+            // Nächstes Bild auswählen
+            currentIndex = (currentIndex + 1) % imageList.length;
+            var nextImageFilename = imageList[currentIndex];
+            
+            // Cache-Buster anhängen (?t=...), damit Browser Bild neu lädt falls es überschrieben wurde
+            var timestamp = new Date().getTime();
+            var srcPath = "/static/images/" + nextImageFilename + "?t=" + timestamp;
+
+            // Logik für den Wechsel zwischen img1 und img2
+            var currentImg = document.getElementById(activeContainer === 1 ? 'img1' : 'img2');
+            var nextImg = document.getElementById(activeContainer === 1 ? 'img2' : 'img1');
+
+            // Das "versteckte" Bild im Hintergrund laden
+            nextImg.src = srcPath;
+            
+            // Warten bis geladen, dann überblenden (onload ist sicherer als timeout)
+            nextImg.onload = function() {
+                nextImg.className = 'visible';
+                currentImg.className = 'hidden';
+                
+                // Toggle active container
+                activeContainer = (activeContainer === 1) ? 2 : 1;
+            };
+        }
+
+        // Startvorgang
+        fetchImageList(); // Sofort Liste laden
+        
+        // Alle 30 Sekunden Liste neu laden (um neue Uploads zu finden)
+        setInterval(fetchImageList, 30000);
+
+        // Bildwechsel starten (mit kurzer Verzögerung für den ersten Ladevorgang)
+        setTimeout(function() {
+            showNextImage(); // Erstes Bild
+            setInterval(showNextImage, duration); // Loop
+        }, 1000);
+
+    </script>
+</body>
+</html>
