@@ -1,0 +1,5 @@
+# Ignoriere alle Bilder im images Ordner
+static/images/*
+
+# Aber behalte die leere .gitkeep Datei (damit der Ordner existiert)
+!static/images/.gitkeep
