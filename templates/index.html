@@ -8,56 +8,114 @@
     <title>Bilderrahmen</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        
         .media-container { position: absolute; width: 100vmin; height: 100vmin; opacity: 0; transition: opacity 1.5s ease-in-out; background: #000; }
         .media-container.visible { opacity: 1; }
         img, video { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+        /* Das Helligkeits-Overlay */
+        #brightness-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: black;
+            pointer-events: none; /* Klicks gehen durch */
+            z-index: 9999; /* Immer ganz oben */
+            opacity: 0; /* Standard: Transparent */
+            transition: opacity 2s ease-in-out; /* Weicher Helligkeitswechsel */
+        }
     </style>
 </head>
 <body>
+    <div id="brightness-overlay"></div>
+
     <div id="container1" class="media-container visible"></div>
     <div id="container2" class="media-container"></div>
 
     <script>
-        var mediaList = [];
-        var currentIndex = -1; // Startwert
+        var allMedia = [];      // Alle Bilder vom Server
+        var playlist = [];      // Die aktuell abgespielte Liste (gefiltert)
+        var currentIndex = -1;
         var activeContainerId = 'container1';
         
-        // Standardwerte (werden vom Server überschrieben)
-        var config = { duration: 10, mode: 'slideshow' };
+        // Defaults
+        var config = { 
+            duration: 10, mode: 'slideshow', newest_count: 5, 
+            brightness: 100, 
+            night_mode: false, night_start: "22:00", night_end: "07:00", night_brightness: 20 
+        };
 
         function fetchConfigAndImages() {
-            // 1. Config laden
-            fetch('/api/config').then(r => r.json()).then(data => { config = data; });
-
-            // 2. Bilder laden
-            fetch('/api/images').then(r => r.json()).then(data => { 
-                if (data.length) mediaList = data; 
+            // Config und Bilder parallel laden
+            Promise.all([
+                fetch('/api/config').then(r => r.json()),
+                fetch('/api/images').then(r => r.json())
+            ]).then(([newConfig, newImages]) => {
+                config = newConfig;
+                if (newImages.length) allMedia = newImages;
+                
+                updatePlaylist();
+                updateBrightness(); // Helligkeit sofort prüfen
             });
         }
 
-        function playNext() {
-            if (mediaList.length === 0) { setTimeout(playNext, 2000); return; }
-
-            let nextIndex;
-
-            // --- MODUS LOGIK ---
+        // Entscheidet welche Bilder gezeigt werden (Alle vs. Neueste X)
+        function updatePlaylist() {
             if (config.mode === 'newest') {
-                // Immer das allererste Bild (das Neueste) anzeigen
-                nextIndex = 0;
-                
-                // Optimierung: Wenn wir schon das neuste Bild zeigen und es kein Video ist, nichts tun
-                // (Verhindert unnötiges Neuladen/Flackern bei "Newest Only")
-                if (currentIndex === 0 && mediaList[0].type !== 'video' && document.querySelector('.visible img')) {
-                    setTimeout(playNext, 5000); // Einfach warten und später prüfen ob was neues kam
-                    return; 
-                }
+                // Nur die ersten X Bilder nehmen
+                playlist = allMedia.slice(0, config.newest_count);
             } else {
-                // Slideshow: Einfach hochzählen
-                nextIndex = (currentIndex + 1) % mediaList.length;
+                // Alle Bilder nehmen
+                playlist = allMedia;
+            }
+        }
+
+        function isNightTime() {
+            if (!config.night_mode) return false;
+
+            const now = new Date();
+            const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+            const [startH, startM] = config.night_start.split(':').map(Number);
+            const [endH, endM] = config.night_end.split(':').map(Number);
+            
+            const startTotal = startH * 60 + startM;
+            const endTotal = endH * 60 + endM;
+
+            // Logik für Zeitfenster (auch über Mitternacht hinaus, z.B. 22:00 bis 07:00)
+            if (startTotal < endTotal) {
+                // Z.B. 09:00 bis 17:00
+                return currentMinutes >= startTotal && currentMinutes < endTotal;
+            } else {
+                // Z.B. 22:00 bis 07:00 (geht über Mitternacht)
+                return currentMinutes >= startTotal || currentMinutes < endTotal;
+            }
+        }
+
+        function updateBrightness() {
+            let targetBrightness = config.brightness;
+
+            if (isNightTime()) {
+                targetBrightness = config.night_brightness;
             }
 
-            var item = mediaList[nextIndex];
-            currentIndex = nextIndex; // Merken wo wir sind
+            // Helligkeit in Opacity umrechnen
+            // 100% Helligkeit = 0% Schwarz-Overlay
+            // 20% Helligkeit = 80% Schwarz-Overlay
+            const opacity = 1 - (targetBrightness / 100);
+            document.getElementById('brightness-overlay').style.opacity = opacity;
+        }
+
+        function playNext() {
+            if (playlist.length === 0) { setTimeout(playNext, 2000); return; }
+
+            // Nächstes Bild wählen
+            let nextIndex = (currentIndex + 1) % playlist.length;
+            
+            // Falls Playlist kürzer wurde (z.B. Einstellung geändert von 10 auf 3 Bilder)
+            if (nextIndex >= playlist.length) nextIndex = 0;
+
+            var item = playlist[nextIndex];
+            currentIndex = nextIndex;
 
             var nextContainerId = (activeContainerId === 'container1') ? 'container2' : 'container1';
             var nextDiv = document.getElementById(nextContainerId);
@@ -65,9 +123,6 @@
             
             nextDiv.innerHTML = '';
             var el;
-            
-            // --- DAUER LOGIK ---
-            // Videos haben ihre eigene Dauer, Bilder nutzen die Config
             var slideDuration = config.duration * 1000; 
 
             if (item.type === 'video') {
@@ -82,16 +137,7 @@
                    activeContainerId = nextDiv.id;
                    el.play().catch(e => console.log("Autoplay blocked", e));
                 };
-                
-                // Wenn Modus "Newest" ist, Video loopen. Sonst nächstes Bild.
-                if (config.mode === 'newest') {
-                    el.loop = true;
-                    // Trotzdem prüfen wir ab und zu auf neue uploads
-                    setTimeout(playNext, 60000); 
-                } else {
-                    el.onended = playNext;
-                }
-                
+                el.onended = playNext;
                 el.onerror = () => setTimeout(playNext, 1000);
 
             } else {
@@ -112,7 +158,11 @@
 
         // Init
         fetchConfigAndImages();
-        setInterval(fetchConfigAndImages, 15000); // Alle 15 sek prüfen ob Settings/Bilder neu sind
+        
+        // Regelmäßige Checks
+        setInterval(fetchConfigAndImages, 15000); // Neue Bilder/Config laden
+        setInterval(updateBrightness, 60000);     // Jede Minute: Ist es jetzt Nacht?
+        
         setTimeout(playNext, 1000);
     </script>
 </body>

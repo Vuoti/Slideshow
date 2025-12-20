@@ -111,12 +111,23 @@ def admin():
 @app.route('/api/config', methods=['GET', 'POST'])
 def handle_config():
     """Liest oder speichert die globalen Einstellungen"""
-    # Defaults: 10 Sekunden, Slideshow-Modus
-    defaults = {"duration": 10, "mode": "slideshow"} # mode: 'slideshow' oder 'newest'
+    defaults = {
+        "duration": 10, 
+        "mode": "slideshow",        # 'slideshow' oder 'newest'
+        "newest_count": 5,          # Wie viele Bilder im "Newest" Modus rotieren?
+        "brightness": 100,          # Globale Helligkeit (0-100)
+        "night_mode": False,        # Nachtmodus an/aus
+        "night_start": "22:00",     # Startzeit
+        "night_end": "07:00",       # Endzeit
+        "night_brightness": 20      # Helligkeit nachts
+    }
     
     if request.method == 'POST':
-        new_settings = request.json
-        save_json(SETTINGS_FILE, new_settings)
+        # Wir laden erst die alten Settings, damit wir keine Keys verlieren, 
+        # die nicht im Request waren (Merge)
+        current_settings = load_json(SETTINGS_FILE, defaults)
+        current_settings.update(request.json)
+        save_json(SETTINGS_FILE, current_settings)
         return jsonify({"success": True})
         
     return jsonify(load_json(SETTINGS_FILE, defaults))

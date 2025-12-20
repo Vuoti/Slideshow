@@ -34,20 +34,55 @@
 </head>
 <body>
 
-    <div class="settings-box">
-        <h3>Einstellungen:</h3>
-        <div class="settings-group">
-            <label>Anzeigedauer (Sek):</label>
-            <input type="number" id="durationInput" min="3" value="10">
+<div class="settings-box">
+        <h3>⚙️ Konfiguration</h3>
+        
+        <div style="display: flex; gap: 40px; flex-wrap: wrap;">
+            
+            <div class="settings-col">
+                <h4>Allgemein</h4>
+                <div class="settings-group">
+                    <label>Modus:</label>
+                    <select id="modeInput" onchange="toggleNewestCount()">
+                        <option value="slideshow">Alle Bilder (Shuffle/Loop)</option>
+                        <option value="newest">Nur die Neuesten</option>
+                    </select>
+                </div>
+                
+                <div class="settings-group" id="newestCountGroup" style="display:none;">
+                    <label>Anzahl der Neuesten:</label>
+                    <input type="number" id="newestCountInput" min="1" max="50" style="width: 50px">
+                </div>
+
+                <div class="settings-group">
+                    <label>Anzeigedauer (Sek):</label>
+                    <input type="number" id="durationInput" min="3">
+                </div>
+
+                <div class="settings-group">
+                    <label>Helligkeit Tag (<span id="brightVal">100</span>%):</label>
+                    <input type="range" id="brightnessInput" min="0" max="100" oninput="document.getElementById('brightVal').innerText = this.value">
+                </div>
+            </div>
+
+            <div class="settings-col" style="border-left: 1px solid #555; padding-left: 20px;">
+                <h4>🌙 Nachtmodus</h4>
+                <div class="settings-group">
+                    <label>Aktivieren:</label>
+                    <input type="checkbox" id="nightModeCheck">
+                </div>
+                <div class="settings-group">
+                    <label>Zeitraum:</label>
+                    <input type="time" id="nightStartInput"> bis <input type="time" id="nightEndInput">
+                </div>
+                <div class="settings-group">
+                    <label>Helligkeit Nacht (<span id="nightBrightVal">20</span>%):</label>
+                    <input type="range" id="nightBrightnessInput" min="0" max="100" oninput="document.getElementById('nightBrightVal').innerText = this.value">
+                </div>
+            </div>
         </div>
-        <div class="settings-group">
-            <label>Modus:</label>
-            <select id="modeInput" style="padding: 5px;">
-                <option value="slideshow">Diashow (Wechseln)</option>
-                <option value="newest">Nur das Neueste (Fix)</option>
-            </select>
-        </div>
-        <button class="btn-save" onclick="saveSettings()">Speichern</button>
+
+        <button class="btn-save" style="margin-top: 20px; width: 100%;" onclick="saveSettings()">Einstellungen Speichern</button>
     </div>
 
     <div class="upload-area" onclick="document.getElementById('fileInput').click()">
@@ -81,7 +116,44 @@
             .then(data => {
                 document.getElementById('durationInput').value = data.duration;
                 document.getElementById('modeInput').value = data.mode;
+                document.getElementById('newestCountInput').value = data.newest_count || 5;
+                
+                document.getElementById('brightnessInput').value = data.brightness;
+                document.getElementById('brightVal').innerText = data.brightness;
+                
+                document.getElementById('nightModeCheck').checked = data.night_mode;
+                document.getElementById('nightStartInput').value = data.night_start;
+                document.getElementById('nightEndInput').value = data.night_end;
+                document.getElementById('nightBrightnessInput').value = data.night_brightness;
+                document.getElementById('nightBrightVal').innerText = data.night_brightness;
+
+                toggleNewestCount();
             });
+
+        function toggleNewestCount() {
+            const mode = document.getElementById('modeInput').value;
+            document.getElementById('newestCountGroup').style.display = (mode === 'newest') ? 'flex' : 'none';
+        }
+
+        function saveSettings() {
+            const data = {
+                duration: parseInt(document.getElementById('durationInput').value),
+                mode: document.getElementById('modeInput').value,
+                newest_count: parseInt(document.getElementById('newestCountInput').value),
+                brightness: parseInt(document.getElementById('brightnessInput').value),
+                night_mode: document.getElementById('nightModeCheck').checked,
+                night_start: document.getElementById('nightStartInput').value,
+                night_end: document.getElementById('nightEndInput').value,
+                night_brightness: parseInt(document.getElementById('nightBrightnessInput').value)
+            };
+
+            fetch('/api/config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            }).then(() => alert('Einstellungen gespeichert!'));
+        }
+        
 
         function saveSettings() {
             const duration = parseInt(document.getElementById('durationInput').value);
