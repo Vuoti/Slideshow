@@ -20,3 +20,6 @@ static/images/*
 # --- Syncthing (Falls du den Sync-Ordner im Projekt hast) ---
 .stfolder/
 .stignore
+
+# --- Settings nicht überschreiben bei updates ---
+settings.json
