@@ -3,145 +3,202 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin</title>
+    <title>Bilderrahmen Admin</title>
     <style>
-        body { font-family: sans-serif; background: #222; color: #fff; padding: 20px; }
+        :root { --accent: #007aff; --bg: #1c1c1e; --card: #2c2c2e; --text: #f2f2f7; --danger: #ff453a; --success: #32d74b; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; }
+        h3, h4 { margin-top: 0; }
         
-        /* Settings Box */
-        .settings-box { background: #333; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap;}
-        .settings-group { display: flex; align-items: center; gap: 10px; }
-        input[type="number"] { width: 60px; padding: 5px; border-radius: 4px; border: none; }
+        /* Layout */
+        .container { max-width: 1200px; margin: 0 auto; }
         
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
-        .grid-item { position: relative; cursor: pointer; aspect-ratio: 1/1; overflow: hidden; border: 2px solid transparent; }
+        /* Status Bar (Active Freeze) */
+        #freeze-bar { 
+            background: var(--accent); color: white; padding: 15px; border-radius: 12px; margin-bottom: 20px; 
+            display: none; align-items: center; justify-content: space-between; box-shadow: 0 4px 15px rgba(0,122,255,0.4);
+        }
+        
+        /* Settings Cards */
+        .settings-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .card { background: var(--card); padding: 20px; border-radius: 12px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-size: 0.9em; color: #aaa; }
+        input, select { width: 100%; padding: 10px; background: #444; border: none; border-radius: 8px; color: white; box-sizing: border-box; }
+        input[type="range"] { padding: 0; }
+        .row { display: flex; gap: 10px; }
+        
+        /* Upload & Save Buttons */
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1em; transition: transform 0.1s; }
+        .btn:active { transform: scale(0.98); }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-success { background: var(--success); color: black; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-upload { border: 2px dashed #555; background: transparent; color: #aaa; margin-bottom: 30px; }
+        .btn-upload:hover { border-color: var(--accent); color: var(--accent); }
+
+        /* Grid */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+        .grid-item { position: relative; aspect-ratio: 1/1; border-radius: 8px; overflow: hidden; cursor: pointer; border: 3px solid transparent; transition: 0.2s; }
+        .grid-item:hover { transform: scale(1.02); }
+        .grid-item.active-freeze { border-color: var(--success); box-shadow: 0 0 15px var(--success); }
         .grid-item img { width: 100%; height: 100%; object-fit: cover; }
-        .grid-item:hover { border-color: #007aff; }
-
-        /* Editor */
-        #editor { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 100; flex-direction: column; align-items: center; justify-content: center; }
-        #editor-img-container { position: relative; max-width: 90vw; max-height: 60vh; border: 2px solid #fff; overflow: hidden; }
-        #editor-img { max-width: 100%; max-height: 60vh; display: block; }
-        #focus-point { position: absolute; width: 20px; height: 20px; background: rgba(255, 0, 0, 0.7); border: 2px solid white; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
-
-        .controls { margin-top: 20px; display: flex; gap: 10px; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; border: none; border-radius: 5px; }
-        .btn-save { background: #007aff; color: white; }
-        .btn-cancel { background: #444; color: white; }
-        .btn-delete { background: #ff3b30; color: white; margin-left: 20px;}
         
-        .upload-area { border: 2px dashed #555; padding: 20px; text-align: center; margin-bottom: 20px; cursor: pointer; }
+        /* Editor Modal */
+        #editor { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 100; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; }
+        #editor-img-container { position: relative; max-width: 100%; max-height: 60vh; border: 2px solid #555; overflow: hidden; border-radius: 8px; margin-bottom: 20px; }
+        #editor-img { max-width: 100%; max-height: 60vh; display: block; }
+        #focus-point { position: absolute; width: 30px; height: 30px; background: rgba(255, 0, 0, 0.6); border: 2px solid white; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 10px black; }
+        
+        .editor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: 500px; }
+        .btn-freeze { background: var(--success); color: black; grid-column: span 2; }
     </style>
 </head>
 <body>
-
-<div class="settings-box">
-        <h3>⚙️ Konfiguration</h3>
+    <div class="container">
         
-        <div style="display: flex; gap: 40px; flex-wrap: wrap;">
-            
-            <div class="settings-col">
-                <h4>Allgemein</h4>
-                <div class="settings-group">
-                    <label>Modus:</label>
+        <div id="freeze-bar">
+            <span>❄️ Ein Bild ist gerade eingefroren!</span>
+            <button class="btn" style="width: auto; background: white; color: black; padding: 5px 15px;" onclick="unfreeze()">Lösen</button>
+        </div>
+
+        <div class="settings-container">
+            <div class="card">
+                <h3>⚙️ Allgemein</h3>
+                <div class="form-group">
+                    <label>Modus</label>
                     <select id="modeInput" onchange="toggleNewestCount()">
-                        <option value="slideshow">Alle Bilder (Shuffle/Loop)</option>
+                        <option value="slideshow">Diashow (Alle Bilder)</option>
                         <option value="newest">Nur die Neuesten</option>
                     </select>
                 </div>
-                
-                <div class="settings-group" id="newestCountGroup" style="display:none;">
-                    <label>Anzahl der Neuesten:</label>
-                    <input type="number" id="newestCountInput" min="1" max="50" style="width: 50px">
+                <div class="form-group" id="newestCountGroup" style="display:none;">
+                    <label>Anzahl der Neuesten</label>
+                    <input type="number" id="newestCountInput" min="1" max="50">
                 </div>
-
-                <div class="settings-group">
-                    <label>Anzeigedauer (Sek):</label>
+                <div class="form-group">
+                    <label>Anzeigedauer (Sekunden)</label>
                     <input type="number" id="durationInput" min="3">
                 </div>
-
-                <div class="settings-group">
-                    <label>Helligkeit Tag (<span id="brightVal">100</span>%):</label>
-                    <input type="range" id="brightnessInput" min="0" max="100" oninput="document.getElementById('brightVal').innerText = this.value">
+                <div class="form-group">
+                    <label>Helligkeit (<span id="brightVal">100</span>%)</label>
+                    <input type="range" id="brightnessInput" min="0" max="100" oninput="document.getElementById('brightVal').innerText=this.value">
                 </div>
             </div>
 
-            <div class="settings-col" style="border-left: 1px solid #555; padding-left: 20px;">
-                <h4>🌙 Nachtmodus</h4>
-                <div class="settings-group">
-                    <label>Aktivieren:</label>
-                    <input type="checkbox" id="nightModeCheck">
+            <div class="card">
+                <h3>🌙 Nachtmodus</h3>
+                <div class="row">
+                    <div class="form-group" style="flex:1">
+                         <label>Aktiv?</label>
+                         <input type="checkbox" id="nightModeCheck" style="width: 20px; height: 20px;">
+                    </div>
+                    <div class="form-group" style="flex:3">
+                        <label>Dauer Nacht (Sek)</label>
+                        <input type="number" id="nightDurationInput">
+                    </div>
                 </div>
-                <div class="settings-group">
-                    <label>Zeitraum:</label>
-                    <input type="time" id="nightStartInput"> bis <input type="time" id="nightEndInput">
+                <div class="row">
+                    <div class="form-group">
+                        <label>Start</label>
+                        <input type="time" id="nightStartInput">
+                    </div>
+                    <div class="form-group">
+                        <label>Ende</label>
+                        <input type="time" id="nightEndInput">
+                    </div>
                 </div>
-                
-                <div class="settings-group">
-                    <label>Dauer Nacht (Sek):</label>
-                    <input type="number" id="nightDurationInput" min="3">
+                <div class="form-group">
+                    <label>Helligkeit Nacht (<span id="nightBrightVal">20</span>%)</label>
+                    <input type="range" id="nightBrightnessInput" min="0" max="100" oninput="document.getElementById('nightBrightVal').innerText=this.value">
                 </div>
-
-                <div class="settings-group">
-                    <label>Helligkeit Nacht (<span id="nightBrightVal">20</span>%):</label>
-                    <input type="range" id="nightBrightnessInput" min="0" max="100" oninput="document.getElementById('nightBrightVal').innerText = this.value">
-                </div>
+                <button class="btn btn-primary" onclick="saveSettings()">Einstellungen Speichern</button>
             </div>
         </div>
 
-        <button class="btn-save" style="margin-top: 20px; width: 100%;" onclick="saveSettings()">Einstellungen Speichern</button>
-    </div>
-
-    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
-        + Bilder hochladen
+        <button class="btn btn-upload" onclick="document.getElementById('fileInput').click()">
+            📸 Neues Bild hochladen
+        </button>
         <input type="file" id="fileInput" multiple style="display:none" onchange="uploadFiles(this.files)">
-    </div>
 
-    <div class="grid" id="grid">Loading...</div>
+        <div class="grid" id="grid"></div>
+    </div>
 
     <div id="editor">
-        <h3 style="color:white; margin-bottom:10px;">Fokus setzen (Klick) oder Löschen</h3>
+        <h3 style="margin-bottom: 10px;">Bild bearbeiten</h3>
+        <p style="font-size: 0.8em; color: #aaa; margin-top: -10px; margin-bottom: 10px;">Klicke auf das Gesicht, um den Fokus zu setzen.</p>
+        
         <div id="editor-img-container" onclick="setFocus(event)">
             <img id="editor-img" src="">
             <div id="focus-point"></div>
         </div>
-        <div class="controls">
-            <button class="btn-cancel" onclick="closeEditor()">Abbrechen</button>
-            <button class="btn-delete" onclick="deleteImage()">Löschen 🗑️</button>
-            <button class="btn-save" onclick="saveCrop()">Speichern</button>
+        
+        <div class="editor-actions">
+            <button class="btn btn-freeze" onclick="freezeImage()">✨ NUR DIESES ANZEIGEN</button>
+            <button class="btn btn-primary" onclick="saveCrop()">Speichern</button>
+            <button class="btn btn-danger" onclick="deleteImage()">Löschen</button>
+            <button class="btn" style="background:#555; grid-column: span 2;" onclick="closeEditor()">Abbrechen</button>
         </div>
     </div>
 
     <script>
         let currentFilename = '';
-        let currentX = 50;
-        let currentY = 50;
+        let currentX = 50; let currentY = 50;
+        let globalConfig = {};
 
-        // --- Config Laden ---
-        fetch('/api/config')
-            .then(res => res.json())
-            .then(data => {
+        function loadAll() {
+            fetch('/api/config').then(r=>r.json()).then(data => {
+                globalConfig = data;
+                
+                // Inputs füllen
                 document.getElementById('durationInput').value = data.duration;
                 document.getElementById('modeInput').value = data.mode;
                 document.getElementById('newestCountInput').value = data.newest_count || 5;
-                
                 document.getElementById('brightnessInput').value = data.brightness;
                 document.getElementById('brightVal').innerText = data.brightness;
-                
                 document.getElementById('nightModeCheck').checked = data.night_mode;
                 document.getElementById('nightStartInput').value = data.night_start;
                 document.getElementById('nightEndInput').value = data.night_end;
-                
-                // NEU: Laden
                 document.getElementById('nightDurationInput').value = data.night_duration || 30;
-                
                 document.getElementById('nightBrightnessInput').value = data.night_brightness;
                 document.getElementById('nightBrightVal').innerText = data.night_brightness;
 
-                toggleNewestCount();
-            });
+                // Freeze Bar Logik
+                const bar = document.getElementById('freeze-bar');
+                if (data.forced_image) {
+                    bar.style.display = 'flex';
+                    bar.innerHTML = `<span>❄️ <b>${data.forced_image}</b> wird dauerhaft angezeigt!</span> <button class="btn" style="width: auto; background: white; color: black; padding: 5px 15px;" onclick="unfreeze()">Lösen</button>`;
+                } else {
+                    bar.style.display = 'none';
+                }
 
-        function saveSettings() {
-            const data = {
+                toggleNewestCount();
+                loadImages(); // Grid laden nachdem Config da ist (wegen Highlight)
+            });
+        }
+
+        function loadImages() {
+            fetch('/api/images').then(r=>r.json()).then(data => {
+                const grid = document.getElementById('grid');
+                grid.innerHTML = '';
+                data.forEach(img => {
+                    const div = document.createElement('div');
+                    div.className = 'grid-item';
+                    if (globalConfig.forced_image === img.url) div.classList.add('active-freeze');
+                    
+                    div.innerHTML = `<img src="/static/images/${img.url}" style="object-position: ${img.focus_x}% ${img.focus_y}%">`;
+                    div.onclick = () => openEditor(img);
+                    grid.appendChild(div);
+                });
+            });
+        }
+
+        function toggleNewestCount() {
+            const mode = document.getElementById('modeInput').value;
+            document.getElementById('newestCountGroup').style.display = (mode === 'newest') ? 'block' : 'none';
+        }
+
+        function saveSettings(overrideData = null) {
+            const data = overrideData || {
                 duration: parseInt(document.getElementById('durationInput').value),
                 mode: document.getElementById('modeInput').value,
                 newest_count: parseInt(document.getElementById('newestCountInput').value),
@@ -149,46 +206,41 @@
                 night_mode: document.getElementById('nightModeCheck').checked,
                 night_start: document.getElementById('nightStartInput').value,
                 night_end: document.getElementById('nightEndInput').value,
-                
-                // NEU: Speichern
                 night_duration: parseInt(document.getElementById('nightDurationInput').value),
-                
                 night_brightness: parseInt(document.getElementById('nightBrightnessInput').value)
+                // forced_image wird hier NICHT überschrieben, das passiert nur via freeze/unfreeze
             };
 
             fetch('/api/config', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(data)
-            }).then(() => alert('Einstellungen gespeichert!'));
-        }
-    
-
-        // --- Bilder Laden ---
-        function loadImages() {
-            fetch('/api/images')
-                .then(res => res.json())
-                .then(data => {
-                    const grid = document.getElementById('grid');
-                    grid.innerHTML = '';
-                    data.forEach(img => {
-                        const div = document.createElement('div');
-                        div.className = 'grid-item';
-                        div.innerHTML = `<img src="/static/images/${img.url}" style="object-position: ${img.focus_x}% ${img.focus_y}%">`;
-                        div.onclick = () => openEditor(img);
-                        grid.appendChild(div);
-                    });
-                });
+            }).then(() => {
+                if(!overrideData) alert('Gespeichert!');
+                loadAll();
+            });
         }
 
-        // --- Editor Logik ---
+        // --- Freeze Logic ---
+        function freezeImage() {
+            // Wir laden die aktuelle Config, setzen forced_image und speichern zurück
+            const newConfig = { ...globalConfig, forced_image: currentFilename };
+            saveSettings(newConfig);
+            closeEditor();
+        }
+
+        function unfreeze() {
+            const newConfig = { ...globalConfig, forced_image: null };
+            saveSettings(newConfig);
+        }
+
+        // --- Editor ---
         function openEditor(imgData) {
             currentFilename = imgData.url;
-            currentX = imgData.focus_x;
-            currentY = imgData.focus_y;
-            document.getElementById('editor-img').src = '/static/images/' + imgData.url;
+            currentX = imgData.focus_x; currentY = imgData.focus_y;
+            const img = document.getElementById('editor-img');
+            img.src = '/static/images/' + imgData.url;
             document.getElementById('editor').style.display = 'flex';
-            document.getElementById('editor-img').onload = () => updateCrosshair();
+            img.onload = updateCrosshair;
         }
 
         function setFocus(event) {
@@ -197,30 +249,19 @@
             currentY = Math.round(((event.clientY - rect.top) / rect.height) * 100);
             updateCrosshair();
         }
-
         function updateCrosshair() {
             const point = document.getElementById('focus-point');
-            point.style.left = currentX + '%';
-            point.style.top = currentY + '%';
+            point.style.left = currentX + '%'; point.style.top = currentY + '%';
         }
-
         function saveCrop() {
-            fetch('/api/update_crop', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ filename: currentFilename, x: currentX, y: currentY })
-            }).then(() => { closeEditor(); loadImages(); });
+            fetch('/api/update_crop', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ filename: currentFilename, x: currentX, y: currentY }) })
+            .then(() => { closeEditor(); loadImages(); });
         }
-
         function deleteImage() {
             if(!confirm("Wirklich löschen?")) return;
-            fetch('/api/delete', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ filename: currentFilename })
-            }).then(() => { closeEditor(); loadImages(); });
+            fetch('/api/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ filename: currentFilename }) })
+            .then(() => { closeEditor(); loadAll(); });
         }
-
         function closeEditor() { document.getElementById('editor').style.display = 'none'; }
         
         function uploadFiles(files) {
@@ -228,11 +269,11 @@
             for (let i = 0; i < files.length; i++) {
                 formData.append('file', files[i]);
                 fetch('/api/upload', {method: 'POST', body: formData})
-                .then(() => { if(i === files.length -1) setTimeout(loadImages, 1000); });
+                .then(() => { if(i === files.length -1) setTimeout(loadAll, 1000); });
             }
         }
 
-        loadImages();
+        loadAll();
     </script>
 </body>
 </html>
