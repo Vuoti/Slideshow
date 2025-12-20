@@ -1,40 +1,29 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<head>
     <meta charset="UTF-8">
-    <title>Bilderrahmen</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Omas Rahmen">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-
-    <link rel="icon" type="image/png" href="/static/favicon-96x96.png" sizes="96x96" />
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
-    <link rel="shortcut icon" href="/static/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png" />
-    <link rel="manifest" href="/static/site.webmanifest" />
-
+    <title>Bilderrahmen</title>
     <style>
-        body { margin: 0; background-color: #000; overflow: hidden; height: 100vh; width: 100vw; }
+        body { margin: 0; background: #000; overflow: hidden; height: 100vh; display: flex; justify-content: center; align-items: center; }
         
-        /* Container für die Medien */
         .media-container {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            display: flex; justify-content: center; align-items: center;
+            position: absolute; width: 80vmin; height: 80vmin;
             opacity: 0; transition: opacity 1.5s ease-in-out;
+            background: #000; /* Verhindert Blitzen beim Wechsel */
         }
-
         .media-container.visible { opacity: 1; }
 
         img, video {
-            max-width: 100%; max-height: 100%; width: auto; height: auto;
-            object-fit: contain;
+            width: 100%; height: 100%;
+            object-fit: cover; 
+            display: block;
         }
     </style>
 </head>
 <body>
-
     <div id="container1" class="media-container visible"></div>
     <div id="container2" class="media-container"></div>
 
@@ -42,88 +31,74 @@
         var mediaList = [];
         var currentIndex = 0;
         var activeContainerId = 'container1';
-        var defaultDuration = 10000; // 10 Sekunden für Bilder
 
         function fetchMediaList() {
             fetch('/api/images')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.length > 0) mediaList = data;
-                });
+                .then(r => r.json()).then(data => { if (data.length) mediaList = data; });
         }
 
         function playNext() {
-            if (mediaList.length === 0) {
-                setTimeout(playNext, 2000);
-                return;
-            }
+            if (mediaList.length === 0) { setTimeout(playNext, 2000); return; }
 
             currentIndex = (currentIndex + 1) % mediaList.length;
             var item = mediaList[currentIndex];
-            var timestamp = new Date().getTime(); // Cache buster
-            var url = "/static/images/" + item.url + "?t=" + timestamp;
-
-            // Welcher Container ist gerade NICHT sichtbar? (Buffer)
+            
             var nextContainerId = (activeContainerId === 'container1') ? 'container2' : 'container1';
-            var nextContainer = document.getElementById(nextContainerId);
-            var currentContainer = document.getElementById(activeContainerId);
-
-            // Inhalt leeren und neu befüllen
-            nextContainer.innerHTML = '';
+            var nextDiv = document.getElementById(nextContainerId);
+            var currentDiv = document.getElementById(activeContainerId);
             
-            var mediaElement;
-
+            // Container leeren und bereit machen
+            nextDiv.innerHTML = '';
+            
+            var el;
+            
+            // --- VIDEO LOGIK ---
             if (item.type === 'video') {
-                mediaElement = document.createElement('video');
-                mediaElement.src = url;
-                mediaElement.muted = true; // Wichtig für Autoplay
-                mediaElement.playsInline = true; // Wichtig für iOS
-                mediaElement.autoplay = true;
+                el = document.createElement('video');
+                el.src = "/static/images/" + item.url;
+                el.muted = true;    // Pflicht für Autoplay
+                el.autoplay = true; 
+                el.playsInline = true; // Pflicht für iOS
+                el.style.objectPosition = "center center"; 
                 
-                // Wenn Video geladen ist, anzeigen
-                mediaElement.oncanplay = function() {
-                    performTransition(currentContainer, nextContainer, mediaElement, true);
-                };
-                
-                // Wenn Fehler beim Video, überspringen
-                mediaElement.onerror = function() {
-                    setTimeout(playNext, 1000);
+                // WICHTIG: Sobald das Video bereit ist -> Sichtbar machen
+                el.oncanplay = () => {
+                   nextDiv.classList.add('visible');
+                   currentDiv.classList.remove('visible');
+                   activeContainerId = nextDiv.id;
+                   
+                   // Video starten (sicherheitshalber explizit)
+                   el.play().catch(e => console.log("Autoplay blocked:", e));
                 };
 
+                el.onended = playNext;
+                el.onerror = () => { console.log("Video error"); setTimeout(playNext, 1000); };
+            
+            // --- BILD LOGIK ---
             } else {
-                mediaElement = document.createElement('img');
-                mediaElement.src = url;
+                el = document.createElement('img');
+                el.src = "/static/images/" + item.url;
                 
-                mediaElement.onload = function() {
-                    performTransition(currentContainer, nextContainer, mediaElement, false);
+                // Crop Position aus der API anwenden
+                el.style.objectPosition = item.focus_x + "% " + item.focus_y + "%";
+                
+                el.onload = () => {
+                   nextDiv.classList.add('visible');
+                   currentDiv.classList.remove('visible');
+                   activeContainerId = nextDiv.id;
+                   setTimeout(playNext, 10000); // 10 Sekunden Anzeigedauer für Bilder
                 };
+                
+                el.onerror = () => setTimeout(playNext, 1000);
             }
             
-            nextContainer.appendChild(mediaElement);
-        }
-
-        function performTransition(oldDiv, newDiv, element, isVideo) {
-            newDiv.classList.add('visible');
-            oldDiv.classList.remove('visible');
-            activeContainerId = newDiv.id;
-
-            if (isVideo) {
-                // Video abspielen und warten bis Ende
-                element.play().catch(e => console.log("Autoplay blocked", e));
-                element.onended = function() {
-                    playNext();
-                };
-            } else {
-                // Bild: Einfach Timer warten
-                setTimeout(playNext, defaultDuration);
-            }
+            nextDiv.appendChild(el);
         }
 
         // Start
         fetchMediaList();
-        setInterval(fetchMediaList, 30000);
+        setInterval(fetchMediaList, 30000); // Liste alle 30 sek aktualisieren
         setTimeout(playNext, 1000);
-
     </script>
 </body>
 </html>
