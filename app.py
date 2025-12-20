@@ -111,26 +111,31 @@ def admin():
 @app.route('/api/config', methods=['GET', 'POST'])
 def handle_config():
     """Liest oder speichert die globalen Einstellungen"""
-    defaults = {
+    # 1. Starten mit den vollen Standardwerten
+    current_settings = {
         "duration": 10, 
-        "mode": "slideshow",        # 'slideshow' oder 'newest'
-        "newest_count": 5,          # Wie viele Bilder im "Newest" Modus rotieren?
-        "brightness": 100,          # Globale Helligkeit (0-100)
-        "night_mode": False,        # Nachtmodus an/aus
-        "night_start": "22:00",     # Startzeit
-        "night_end": "07:00",       # Endzeit
-        "night_brightness": 20      # Helligkeit nachts
+        "mode": "slideshow",
+        "newest_count": 5,
+        "brightness": 100,
+        "night_mode": False,
+        "night_start": "22:00",
+        "night_end": "07:00",
+        "night_brightness": 20
     }
     
+    # 2. Wenn Datei existiert, Werte laden und Defaults überschreiben
+    if os.path.exists(SETTINGS_FILE):
+        with open(SETTINGS_FILE, 'r') as f:
+            saved_data = json.load(f)
+            current_settings.update(saved_data)
+    
     if request.method == 'POST':
-        # Wir laden erst die alten Settings, damit wir keine Keys verlieren, 
-        # die nicht im Request waren (Merge)
-        current_settings = load_json(SETTINGS_FILE, defaults)
+        # 3. Neue Werte vom Frontend übernehmen
         current_settings.update(request.json)
         save_json(SETTINGS_FILE, current_settings)
         return jsonify({"success": True})
         
-    return jsonify(load_json(SETTINGS_FILE, defaults))
+    return jsonify(current_settings)
 
 @app.route('/api/images')
 def get_images():

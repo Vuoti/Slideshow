@@ -153,17 +153,7 @@
                 body: JSON.stringify(data)
             }).then(() => alert('Einstellungen gespeichert!'));
         }
-        
-
-        function saveSettings() {
-            const duration = parseInt(document.getElementById('durationInput').value);
-            const mode = document.getElementById('modeInput').value;
-            fetch('/api/config', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ duration: duration, mode: mode })
-            }).then(() => alert('Einstellungen gespeichert!'));
-        }
+    
 
         // --- Bilder Laden ---
         function loadImages() {
