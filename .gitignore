@@ -23,3 +23,4 @@ static/images/*
 
 # --- Settings nicht überschreiben bei updates ---
 settings.json
+crops.json
