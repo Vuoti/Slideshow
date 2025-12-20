@@ -120,14 +120,17 @@ def handle_config():
         "night_mode": False,
         "night_start": "22:00",
         "night_end": "07:00",
-        "night_brightness": 20
+        "night_brightness": 20,
+        "night_duration": 30  # NEU: Standardmäßig 30 Sekunden nachts
     }
     
     # 2. Wenn Datei existiert, Werte laden und Defaults überschreiben
     if os.path.exists(SETTINGS_FILE):
-        with open(SETTINGS_FILE, 'r') as f:
-            saved_data = json.load(f)
-            current_settings.update(saved_data)
+        try:
+            with open(SETTINGS_FILE, 'r') as f:
+                saved_data = json.load(f)
+                current_settings.update(saved_data)
+        except: pass # Falls Datei kaputt ist, Defaults nehmen
     
     if request.method == 'POST':
         # 3. Neue Werte vom Frontend übernehmen
@@ -136,6 +139,7 @@ def handle_config():
         return jsonify({"success": True})
         
     return jsonify(current_settings)
+
 
 @app.route('/api/images')
 def get_images():

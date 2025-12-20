@@ -75,6 +75,12 @@
                     <label>Zeitraum:</label>
                     <input type="time" id="nightStartInput"> bis <input type="time" id="nightEndInput">
                 </div>
+                
+                <div class="settings-group">
+                    <label>Dauer Nacht (Sek):</label>
+                    <input type="number" id="nightDurationInput" min="3">
+                </div>
+
                 <div class="settings-group">
                     <label>Helligkeit Nacht (<span id="nightBrightVal">20</span>%):</label>
                     <input type="range" id="nightBrightnessInput" min="0" max="100" oninput="document.getElementById('nightBrightVal').innerText = this.value">
@@ -124,16 +130,15 @@
                 document.getElementById('nightModeCheck').checked = data.night_mode;
                 document.getElementById('nightStartInput').value = data.night_start;
                 document.getElementById('nightEndInput').value = data.night_end;
+                
+                // NEU: Laden
+                document.getElementById('nightDurationInput').value = data.night_duration || 30;
+                
                 document.getElementById('nightBrightnessInput').value = data.night_brightness;
                 document.getElementById('nightBrightVal').innerText = data.night_brightness;
 
                 toggleNewestCount();
             });
-
-        function toggleNewestCount() {
-            const mode = document.getElementById('modeInput').value;
-            document.getElementById('newestCountGroup').style.display = (mode === 'newest') ? 'flex' : 'none';
-        }
 
         function saveSettings() {
             const data = {
@@ -144,6 +149,10 @@
                 night_mode: document.getElementById('nightModeCheck').checked,
                 night_start: document.getElementById('nightStartInput').value,
                 night_end: document.getElementById('nightEndInput').value,
+                
+                // NEU: Speichern
+                night_duration: parseInt(document.getElementById('nightDurationInput').value),
+                
                 night_brightness: parseInt(document.getElementById('nightBrightnessInput').value)
             };
 
