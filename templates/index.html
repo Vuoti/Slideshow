@@ -8,19 +8,9 @@
     <title>Bilderrahmen</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; height: 100vh; display: flex; justify-content: center; align-items: center; }
-        
-        .media-container {
-            position: absolute; width: 80vmin; height: 80vmin;
-            opacity: 0; transition: opacity 1.5s ease-in-out;
-            background: #000;
-        }
+        .media-container { position: absolute; width: 100vmin; height: 100vmin; opacity: 0; transition: opacity 1.5s ease-in-out; background: #000; }
         .media-container.visible { opacity: 1; }
-
-        img, video {
-            width: 100%; height: 100%;
-            object-fit: cover; 
-            display: block;
-        }
+        img, video { width: 100%; height: 100%; object-fit: cover; display: block; }
     </style>
 </head>
 <body>
@@ -29,75 +19,100 @@
 
     <script>
         var mediaList = [];
-        var currentIndex = 0;
+        var currentIndex = -1; // Startwert
         var activeContainerId = 'container1';
+        
+        // Standardwerte (werden vom Server überschrieben)
+        var config = { duration: 10, mode: 'slideshow' };
 
-        function fetchMediaList() {
-            fetch('/api/images')
-                .then(r => r.json()).then(data => { if (data.length) mediaList = data; });
+        function fetchConfigAndImages() {
+            // 1. Config laden
+            fetch('/api/config').then(r => r.json()).then(data => { config = data; });
+
+            // 2. Bilder laden
+            fetch('/api/images').then(r => r.json()).then(data => { 
+                if (data.length) mediaList = data; 
+            });
         }
 
         function playNext() {
             if (mediaList.length === 0) { setTimeout(playNext, 2000); return; }
 
-            currentIndex = (currentIndex + 1) % mediaList.length;
-            var item = mediaList[currentIndex];
-            
+            let nextIndex;
+
+            // --- MODUS LOGIK ---
+            if (config.mode === 'newest') {
+                // Immer das allererste Bild (das Neueste) anzeigen
+                nextIndex = 0;
+                
+                // Optimierung: Wenn wir schon das neuste Bild zeigen und es kein Video ist, nichts tun
+                // (Verhindert unnötiges Neuladen/Flackern bei "Newest Only")
+                if (currentIndex === 0 && mediaList[0].type !== 'video' && document.querySelector('.visible img')) {
+                    setTimeout(playNext, 5000); // Einfach warten und später prüfen ob was neues kam
+                    return; 
+                }
+            } else {
+                // Slideshow: Einfach hochzählen
+                nextIndex = (currentIndex + 1) % mediaList.length;
+            }
+
+            var item = mediaList[nextIndex];
+            currentIndex = nextIndex; // Merken wo wir sind
+
             var nextContainerId = (activeContainerId === 'container1') ? 'container2' : 'container1';
             var nextDiv = document.getElementById(nextContainerId);
             var currentDiv = document.getElementById(activeContainerId);
             
-            // Container leeren und bereit machen
             nextDiv.innerHTML = '';
-            
             var el;
             
-            // --- VIDEO LOGIK ---
+            // --- DAUER LOGIK ---
+            // Videos haben ihre eigene Dauer, Bilder nutzen die Config
+            var slideDuration = config.duration * 1000; 
+
             if (item.type === 'video') {
                 el = document.createElement('video');
                 el.src = "/static/images/" + item.url;
-                el.muted = true;    // Pflicht für Autoplay
-                el.autoplay = true; 
-                el.playsInline = true; // Pflicht für iOS
+                el.muted = true; el.autoplay = true; el.playsInline = true;
                 el.style.objectPosition = "center center"; 
                 
-                // WICHTIG: Sobald das Video bereit ist -> Sichtbar machen
                 el.oncanplay = () => {
                    nextDiv.classList.add('visible');
                    currentDiv.classList.remove('visible');
                    activeContainerId = nextDiv.id;
-                   
-                   // Video starten (sicherheitshalber explizit)
-                   el.play().catch(e => console.log("Autoplay blocked:", e));
+                   el.play().catch(e => console.log("Autoplay blocked", e));
                 };
+                
+                // Wenn Modus "Newest" ist, Video loopen. Sonst nächstes Bild.
+                if (config.mode === 'newest') {
+                    el.loop = true;
+                    // Trotzdem prüfen wir ab und zu auf neue uploads
+                    setTimeout(playNext, 60000); 
+                } else {
+                    el.onended = playNext;
+                }
+                
+                el.onerror = () => setTimeout(playNext, 1000);
 
-                el.onended = playNext;
-                el.onerror = () => { console.log("Video error"); setTimeout(playNext, 1000); };
-            
-            // --- BILD LOGIK ---
             } else {
                 el = document.createElement('img');
                 el.src = "/static/images/" + item.url;
-                
-                // Crop Position aus der API anwenden
                 el.style.objectPosition = item.focus_x + "% " + item.focus_y + "%";
                 
                 el.onload = () => {
                    nextDiv.classList.add('visible');
                    currentDiv.classList.remove('visible');
                    activeContainerId = nextDiv.id;
-                   setTimeout(playNext, 10000); // 10 Sekunden Anzeigedauer für Bilder
+                   setTimeout(playNext, slideDuration);
                 };
-                
                 el.onerror = () => setTimeout(playNext, 1000);
             }
-            
             nextDiv.appendChild(el);
         }
 
-        // Start
-        fetchMediaList();
-        setInterval(fetchMediaList, 30000); // Liste alle 30 sek aktualisieren
+        // Init
+        fetchConfigAndImages();
+        setInterval(fetchConfigAndImages, 15000); // Alle 15 sek prüfen ob Settings/Bilder neu sind
         setTimeout(playNext, 1000);
     </script>
 </body>

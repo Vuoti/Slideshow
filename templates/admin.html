@@ -3,66 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bilderrahmen Config</title>
+    <title>Admin</title>
     <style>
         body { font-family: sans-serif; background: #222; color: #fff; padding: 20px; }
-        h1 { text-align: center; }
         
-        /* Grid Ansicht */
+        /* Settings Box */
+        .settings-box { background: #333; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap;}
+        .settings-group { display: flex; align-items: center; gap: 10px; }
+        input[type="number"] { width: 60px; padding: 5px; border-radius: 4px; border: none; }
+        
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
         .grid-item { position: relative; cursor: pointer; aspect-ratio: 1/1; overflow: hidden; border: 2px solid transparent; }
         .grid-item img { width: 100%; height: 100%; object-fit: cover; }
         .grid-item:hover { border-color: #007aff; }
 
-        /* Der Editor (Modal) */
-        #editor { 
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background: rgba(0,0,0,0.9); z-index: 100; flex-direction: column; align-items: center; justify-content: center; 
-        }
-        
-        #editor-img-container {
-            position: relative; max-width: 90vw; max-height: 70vh;
-            border: 2px solid #fff; overflow: hidden;
-        }
-        
-        #editor-img { max-width: 100%; max-height: 70vh; display: block; }
-        
-        /* Rotes Fadenkreuz */
-        #focus-point {
-            position: absolute; width: 20px; height: 20px;
-            background: rgba(255, 0, 0, 0.7); border: 2px solid white; border-radius: 50%;
-            transform: translate(-50%, -50%); pointer-events: none;
-            box-shadow: 0 0 10px black;
-        }
+        /* Editor */
+        #editor { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 100; flex-direction: column; align-items: center; justify-content: center; }
+        #editor-img-container { position: relative; max-width: 90vw; max-height: 60vh; border: 2px solid #fff; overflow: hidden; }
+        #editor-img { max-width: 100%; max-height: 60vh; display: block; }
+        #focus-point { position: absolute; width: 20px; height: 20px; background: rgba(255, 0, 0, 0.7); border: 2px solid white; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
 
-        .controls { margin-top: 20px; display: flex; gap: 20px; }
+        .controls { margin-top: 20px; display: flex; gap: 10px; }
         button { padding: 10px 20px; font-size: 16px; cursor: pointer; border: none; border-radius: 5px; }
         .btn-save { background: #007aff; color: white; }
         .btn-cancel { background: #444; color: white; }
+        .btn-delete { background: #ff3b30; color: white; margin-left: 20px;}
         
-        /* Upload Area */
-        .upload-area { 
-            border: 2px dashed #555; padding: 20px; text-align: center; margin-bottom: 20px; cursor: pointer; 
-        }
+        .upload-area { border: 2px dashed #555; padding: 20px; text-align: center; margin-bottom: 20px; cursor: pointer; }
     </style>
 </head>
 <body>
 
+    <div class="settings-box">
+        <h3>Einstellungen:</h3>
+        <div class="settings-group">
+            <label>Anzeigedauer (Sek):</label>
+            <input type="number" id="durationInput" min="3" value="10">
+        </div>
+        <div class="settings-group">
+            <label>Modus:</label>
+            <select id="modeInput" style="padding: 5px;">
+                <option value="slideshow">Diashow (Wechseln)</option>
+                <option value="newest">Nur das Neueste (Fix)</option>
+            </select>
+        </div>
+        <button class="btn-save" onclick="saveSettings()">Speichern</button>
+    </div>
+
     <div class="upload-area" onclick="document.getElementById('fileInput').click()">
-        Hier klicken um Bilder hochzuladen (oder Dateien reinziehen)
+        + Bilder hochladen
         <input type="file" id="fileInput" multiple style="display:none" onchange="uploadFiles(this.files)">
     </div>
 
     <div class="grid" id="grid">Loading...</div>
 
     <div id="editor">
-        <h3 style="color:white; margin-bottom:10px;">Klicke auf den wichtigsten Punkt (Gesicht)</h3>
+        <h3 style="color:white; margin-bottom:10px;">Fokus setzen (Klick) oder Löschen</h3>
         <div id="editor-img-container" onclick="setFocus(event)">
             <img id="editor-img" src="">
             <div id="focus-point"></div>
         </div>
         <div class="controls">
             <button class="btn-cancel" onclick="closeEditor()">Abbrechen</button>
+            <button class="btn-delete" onclick="deleteImage()">Löschen 🗑️</button>
             <button class="btn-save" onclick="saveCrop()">Speichern</button>
         </div>
     </div>
@@ -72,6 +75,25 @@
         let currentX = 50;
         let currentY = 50;
 
+        // --- Config Laden ---
+        fetch('/api/config')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('durationInput').value = data.duration;
+                document.getElementById('modeInput').value = data.mode;
+            });
+
+        function saveSettings() {
+            const duration = parseInt(document.getElementById('durationInput').value);
+            const mode = document.getElementById('modeInput').value;
+            fetch('/api/config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ duration: duration, mode: mode })
+            }).then(() => alert('Einstellungen gespeichert!'));
+        }
+
+        // --- Bilder Laden ---
         function loadImages() {
             fetch('/api/images')
                 .then(res => res.json())
@@ -88,29 +110,20 @@
                 });
         }
 
+        // --- Editor Logik ---
         function openEditor(imgData) {
             currentFilename = imgData.url;
             currentX = imgData.focus_x;
             currentY = imgData.focus_y;
-            
-            const img = document.getElementById('editor-img');
-            img.src = '/static/images/' + imgData.url;
-            
+            document.getElementById('editor-img').src = '/static/images/' + imgData.url;
             document.getElementById('editor').style.display = 'flex';
-            
-            // Fadenkreuz positionieren (warten bis Bild geladen für korrekte Maße)
-            img.onload = () => updateCrosshair();
+            document.getElementById('editor-img').onload = () => updateCrosshair();
         }
 
         function setFocus(event) {
             const rect = event.target.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
-            
-            // In Prozent umrechnen
-            currentX = Math.round((x / rect.width) * 100);
-            currentY = Math.round((y / rect.height) * 100);
-            
+            currentX = Math.round(((event.clientX - rect.left) / rect.width) * 100);
+            currentY = Math.round(((event.clientY - rect.top) / rect.height) * 100);
             updateCrosshair();
         }
 
@@ -125,26 +138,26 @@
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ filename: currentFilename, x: currentX, y: currentY })
-            }).then(() => {
-                closeEditor();
-                loadImages(); // Grid aktualisieren
-            });
+            }).then(() => { closeEditor(); loadImages(); });
         }
 
-        function closeEditor() {
-            document.getElementById('editor').style.display = 'none';
+        function deleteImage() {
+            if(!confirm("Wirklich löschen?")) return;
+            fetch('/api/delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ filename: currentFilename })
+            }).then(() => { closeEditor(); loadImages(); });
         }
 
+        function closeEditor() { document.getElementById('editor').style.display = 'none'; }
+        
         function uploadFiles(files) {
             const formData = new FormData();
             for (let i = 0; i < files.length; i++) {
                 formData.append('file', files[i]);
-                
-                // Einzeln hochladen (einfacher)
                 fetch('/api/upload', {method: 'POST', body: formData})
-                .then(() => {
-                    if(i === files.length -1) setTimeout(loadImages, 1000);
-                });
+                .then(() => { if(i === files.length -1) setTimeout(loadImages, 1000); });
             }
         }
 
