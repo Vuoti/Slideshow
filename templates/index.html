@@ -7,104 +7,113 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Bilderrahmen</title>
     <style>
-        body {
-            margin: 0;
-            background-color: #000;
-            overflow: hidden; /* Keine Scrollbalken */
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        /* Wir nutzen zwei Bild-Container für weiche Übergänge */
-        #img1, #img2 {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: contain; /* Bild wird nicht verzerrt */
-            transition: opacity 1.5s ease-in-out; /* Weicher Übergang */
-        }
-
-        .hidden {
-            opacity: 0;
-        }
+        body { margin: 0; background-color: #000; overflow: hidden; height: 100vh; width: 100vw; }
         
-        .visible {
-            opacity: 1;
+        /* Container für die Medien */
+        .media-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            opacity: 0; transition: opacity 1.5s ease-in-out;
+        }
+
+        .media-container.visible { opacity: 1; }
+
+        img, video {
+            max-width: 100%; max-height: 100%; width: auto; height: auto;
+            object-fit: contain;
         }
     </style>
 </head>
 <body>
 
-    <img id="img1" class="visible" src="" />
-    <img id="img2" class="hidden" src="" />
+    <div id="container1" class="media-container visible"></div>
+    <div id="container2" class="media-container"></div>
 
     <script>
-        var imageList = [];
+        var mediaList = [];
         var currentIndex = 0;
-        var activeContainer = 1; // Welches img Tag ist gerade sichtbar? 1 oder 2
-        var duration = 10000; // Anzeigedauer pro Bild in ms (hier 10 Sekunden)
+        var activeContainerId = 'container1';
+        var defaultDuration = 10000; // 10 Sekunden für Bilder
 
-        // 1. Liste der Bilder vom Server holen
-        function fetchImageList() {
-            var xhr = new XMLHttpRequest();
-            xhr.onreadystatechange = function() {
-                if (xhr.readyState === 4 && xhr.status === 200) {
-                    var newImages = JSON.parse(xhr.responseText);
-                    
-                    // Optional: Prüfen ob sich was geändert hat, hier simpel überschreiben
-                    if (newImages.length > 0) {
-                        imageList = newImages;
-                    }
-                }
-            };
-            xhr.open("GET", "/api/images", true);
-            xhr.send();
+        function fetchMediaList() {
+            fetch('/api/images')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.length > 0) mediaList = data;
+                });
         }
 
-        // 2. Das nächste Bild anzeigen (mit Überblendung)
-        function showNextImage() {
-            if (imageList.length === 0) return;
+        function playNext() {
+            if (mediaList.length === 0) {
+                setTimeout(playNext, 2000);
+                return;
+            }
 
-            // Nächstes Bild auswählen
-            currentIndex = (currentIndex + 1) % imageList.length;
-            var nextImageFilename = imageList[currentIndex];
+            currentIndex = (currentIndex + 1) % mediaList.length;
+            var item = mediaList[currentIndex];
+            var timestamp = new Date().getTime(); // Cache buster
+            var url = "/static/images/" + item.url + "?t=" + timestamp;
+
+            // Welcher Container ist gerade NICHT sichtbar? (Buffer)
+            var nextContainerId = (activeContainerId === 'container1') ? 'container2' : 'container1';
+            var nextContainer = document.getElementById(nextContainerId);
+            var currentContainer = document.getElementById(activeContainerId);
+
+            // Inhalt leeren und neu befüllen
+            nextContainer.innerHTML = '';
             
-            // Cache-Buster anhängen (?t=...), damit Browser Bild neu lädt falls es überschrieben wurde
-            var timestamp = new Date().getTime();
-            var srcPath = "/static/images/" + nextImageFilename + "?t=" + timestamp;
+            var mediaElement;
 
-            // Logik für den Wechsel zwischen img1 und img2
-            var currentImg = document.getElementById(activeContainer === 1 ? 'img1' : 'img2');
-            var nextImg = document.getElementById(activeContainer === 1 ? 'img2' : 'img1');
-
-            // Das "versteckte" Bild im Hintergrund laden
-            nextImg.src = srcPath;
-            
-            // Warten bis geladen, dann überblenden (onload ist sicherer als timeout)
-            nextImg.onload = function() {
-                nextImg.className = 'visible';
-                currentImg.className = 'hidden';
+            if (item.type === 'video') {
+                mediaElement = document.createElement('video');
+                mediaElement.src = url;
+                mediaElement.muted = true; // Wichtig für Autoplay
+                mediaElement.playsInline = true; // Wichtig für iOS
+                mediaElement.autoplay = true;
                 
-                // Toggle active container
-                activeContainer = (activeContainer === 1) ? 2 : 1;
-            };
+                // Wenn Video geladen ist, anzeigen
+                mediaElement.oncanplay = function() {
+                    performTransition(currentContainer, nextContainer, mediaElement, true);
+                };
+                
+                // Wenn Fehler beim Video, überspringen
+                mediaElement.onerror = function() {
+                    setTimeout(playNext, 1000);
+                };
+
+            } else {
+                mediaElement = document.createElement('img');
+                mediaElement.src = url;
+                
+                mediaElement.onload = function() {
+                    performTransition(currentContainer, nextContainer, mediaElement, false);
+                };
+            }
+            
+            nextContainer.appendChild(mediaElement);
         }
 
-        // Startvorgang
-        fetchImageList(); // Sofort Liste laden
-        
-        // Alle 30 Sekunden Liste neu laden (um neue Uploads zu finden)
-        setInterval(fetchImageList, 30000);
+        function performTransition(oldDiv, newDiv, element, isVideo) {
+            newDiv.classList.add('visible');
+            oldDiv.classList.remove('visible');
+            activeContainerId = newDiv.id;
 
-        // Bildwechsel starten (mit kurzer Verzögerung für den ersten Ladevorgang)
-        setTimeout(function() {
-            showNextImage(); // Erstes Bild
-            setInterval(showNextImage, duration); // Loop
-        }, 1000);
+            if (isVideo) {
+                // Video abspielen und warten bis Ende
+                element.play().catch(e => console.log("Autoplay blocked", e));
+                element.onended = function() {
+                    playNext();
+                };
+            } else {
+                // Bild: Einfach Timer warten
+                setTimeout(playNext, defaultDuration);
+            }
+        }
+
+        // Start
+        fetchMediaList();
+        setInterval(fetchMediaList, 30000);
+        setTimeout(playNext, 1000);
 
     </script>
 </body>
