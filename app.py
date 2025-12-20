@@ -1,13 +1,18 @@
 import os
+import shutil
 import time
 import threading
 import uuid
 import subprocess
+import logging
 from flask import Flask, render_template, jsonify, request
 from PIL import Image
 from pillow_heif import register_heif_opener
 
-# Damit Pillow HEIC lesen kann
+# Logging aktivieren, damit wir Fehler in der Konsole sehen
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 register_heif_opener()
 
 app = Flask(__name__)
@@ -18,10 +23,6 @@ UPLOAD_SECRET = "oma-ist-die-beste"
 os.makedirs(IMAGE_FOLDER, exist_ok=True)
 
 def convert_media():
-    """
-    Läuft im Hintergrund und sucht nach HEIC oder MOV/HEVC Dateien
-    und erstellt web-freundliche Kopien (JPG/MP4).
-    """
     while True:
         try:
             if os.path.exists(IMAGE_FOLDER):
@@ -30,40 +31,66 @@ def convert_media():
                     name, ext = os.path.splitext(filename)
                     ext = ext.lower()
 
-                    # 1. HEIC zu JPG konvertieren
+                    # WICHTIG: Prüfen, ob Datei vollständig hochgeladen ist.
+                    # Wir warten, bis die Datei seit 5 Sekunden nicht mehr angefasst wurde.
+                    try:
+                        if (time.time() - os.path.getmtime(file_path)) < 5:
+                            continue # Überspringen, Datei ist zu neu (evtl. noch Upload)
+                    except FileNotFoundError:
+                        continue
+
+                    # --- HEIC zu JPG ---
                     if ext == '.heic':
                         target_file = os.path.join(IMAGE_FOLDER, name + ".converted.jpg")
                         if not os.path.exists(target_file):
-                            print(f"Konvertiere HEIC: {filename}")
+                            logger.info(f"Starte Konvertierung: {filename}")
                             try:
                                 img = Image.open(file_path)
                                 img.save(target_file, "JPEG", quality=90)
+                                logger.info(f"Fertig: {target_file}")
                             except Exception as e:
-                                print(f"Fehler bei {filename}: {e}")
+                                logger.error(f"Fehler bei {filename}: {e}")
 
-                    # 2. MOV/M4V/MKV zu MP4 (H.264) konvertieren
+                    # --- MOV/M4V/MKV zu MP4 ---
                     elif ext in ['.mov', '.m4v', '.mkv', '.webm']:
                         target_file = os.path.join(IMAGE_FOLDER, name + ".converted.mp4")
                         if not os.path.exists(target_file):
-                            print(f"Konvertiere Video: {filename}")
-                            # FFmpeg Befehl: Video zu H.264, Audio zu AAC, optimiert für Web
+                            logger.info(f"Starte Video-Konvertierung: {filename}")
+                            
+                            ffmpeg_path = '/usr/bin/ffmpeg'
+                            found_path = shutil.which('ffmpeg')
+                            if found_path:
+                                ffmpeg_path = found_path
+
+                            # Befehl angepasst:
+                            # -pix_fmt yuv420p: Zwingend nötig für Apple HDR Videos im Web
+                            # -vf scale...: Skaliert riesige 4K Videos auf FullHD (spart Platz/Last)
                             cmd = [
-                                'ffmpeg', '-i', file_path,
-                                '-vcodec', 'libx264', '-acodec', 'aac',
-                                '-movflags', 'faststart', # Wichtig für Streaming
+                                '/usr/bin/ffmpeg', '-i', file_path,
+                                '-vcodec', 'libx264',
+                                '-pix_fmt', 'yuv420p', 
+                                '-vf', 'scale=1920:-2', 
+                                '-acodec', 'aac',
+                                '-movflags', 'faststart',
                                 '-y', target_file
                             ]
-                            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            
+                            # Wir lassen uns jetzt Errors anzeigen
+                            result = subprocess.run(cmd, capture_output=True, text=True)
+                            
+                            if result.returncode == 0:
+                                logger.info(f"Video fertig: {target_file}")
+                            else:
+                                logger.error(f"FFmpeg Fehler bei {filename}:\n{result.stderr}")
 
         except Exception as e:
-            print(f"Fehler im Converter-Thread: {e}")
+            logger.error(f"Globaler Fehler im Converter-Thread: {e}")
         
-        # Alle 10 Sekunden prüfen
         time.sleep(10)
 
-# Converter im Hintergrund starten
 threading.Thread(target=convert_media, daemon=True).start()
 
+# --- Der Rest bleibt gleich ---
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -71,39 +98,28 @@ def index():
 @app.route('/api/images')
 def get_images():
     media_list = []
-    # Wir schauen uns den Ordner an
     files = sorted(os.listdir(IMAGE_FOLDER), key=lambda x: os.path.getmtime(os.path.join(IMAGE_FOLDER, x)), reverse=True)
     
     for filename in files:
         name, ext = os.path.splitext(filename)
         ext = ext.lower()
         
-        # Logik: Was zeigen wir an?
-        
-        # A) Es ist ein fertiges Bild/Video (aber kein konvertiertes Duplikat)
         if ".converted." not in filename:
-            
-            # Prüfen ob es eine konvertierte Version gibt
             converted_jpg = name + ".converted.jpg"
             converted_mp4 = name + ".converted.mp4"
             
             item = {}
             
-            # Fall 1: Original ist Web-Safe (JPG, PNG)
-            if ext in ['.jpg', '.jpeg', '.png', '.webp']:
+            # Priorität: Konvertierte Dateien nutzen
+            if os.path.exists(os.path.join(IMAGE_FOLDER, converted_jpg)):
+                 item = {"url": converted_jpg, "type": "image"}
+            elif os.path.exists(os.path.join(IMAGE_FOLDER, converted_mp4)):
+                 item = {"url": converted_mp4, "type": "video"}
+            # Fallbacks
+            elif ext in ['.jpg', '.jpeg', '.png', '.webp']:
                 item = {"url": filename, "type": "image"}
-            
-            # Fall 2: Original war HEIC -> Wir nehmen das JPG
-            elif os.path.exists(os.path.join(IMAGE_FOLDER, converted_jpg)):
-                item = {"url": converted_jpg, "type": "image"}
-                
-            # Fall 3: Original ist Video (MP4) -> Nehmen wir
             elif ext == '.mp4':
                 item = {"url": filename, "type": "video"}
-
-            # Fall 4: Original war MOV etc -> Wir nehmen das MP4
-            elif os.path.exists(os.path.join(IMAGE_FOLDER, converted_mp4)):
-                item = {"url": converted_mp4, "type": "video"}
 
             if item:
                 media_list.append(item)
@@ -128,6 +144,7 @@ def upload_image():
         unique_filename = str(uuid.uuid4()) + ext
         save_path = os.path.join(IMAGE_FOLDER, unique_filename)
         file.save(save_path)
+        logger.info(f"Neuer Upload empfangen: {unique_filename}")
         return jsonify({"success": True, "filename": unique_filename}), 200
 
 if __name__ == '__main__':

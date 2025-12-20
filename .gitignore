@@ -1,5 +1,22 @@
-# Ignoriere alle Bilder im images Ordner
-static/images/*
+# --- Python Basics (Bytecode nicht syncen) ---
+__pycache__/
+*.pyc
 
-# Aber behalte die leere .gitkeep Datei (damit der Ordner existiert)
+# --- Virtual Environments (Das wichtigste!) ---
+venv/
+.venv/
+env/
+
+# --- Mac OS Müll ---
+.DS_Store
+
+# --- Deine Bilder (Ordner behalten, Inhalt ignorieren) ---
+static/images/*
 !static/images/.gitkeep
+
+# --- IDE Einstellungen (Optional, falls du VS Code nutzt) ---
+.vscode/
+
+# --- Syncthing (Falls du den Sync-Ordner im Projekt hast) ---
+.stfolder/
+.stignore
