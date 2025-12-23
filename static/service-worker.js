@@ -1,64 +1,52 @@
-const CACHE_NAME = 'rahmen-cache-v1';
+const CACHE_NAME = 'rahmen-cache-v2'; // Version hochgezählt!
 
-// Diese Dateien sind Pflicht für die App-Hülle
 const PRECACHE_URLS = [
   '/',
   '/static/manifest.json',
-  '/static/icon.png',
-  // Hier keine Bilder listen, das machen wir dynamisch!
+  '/static/icon.png'
 ];
 
-// 1. Installieren
 self.addEventListener('install', event => {
-  self.skipWaiting(); // Sofort aktivieren, nicht warten
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(PRECACHE_URLS))
+    caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE_URLS))
   );
 });
 
-// 2. Aktivieren
 self.addEventListener('activate', event => {
-  event.waitUntil(self.clients.claim()); // Sofort Kontrolle über alle Tabs übernehmen
+  event.waitUntil(self.clients.claim());
 });
 
-// 3. Fetch (Der Türsteher)
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // A) API-Anfragen (Config & Bilderliste)
-  // Strategie: Network First, Fallback to Cache
+  // A) API: Network First, dann Cache
   if (url.pathname === '/' || url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(event.request)
-        .then(networkResponse => {
-          // Wenn Netzwerk erfolgreich: Antwort klonen und in Cache legen
+        .then(response => {
           return caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, networkResponse.clone());
-            return networkResponse;
+            cache.put(event.request, response.clone());
+            return response;
           });
         })
-        .catch(() => {
-          // Wenn Netzwerk tot: Aus Cache holen
-          return caches.match(event.request);
-        })
+        .catch(() => caches.match(event.request))
     );
     return;
   }
 
-  // B) Bilder/Videos (aus /static/images/)
-  // Strategie: Cache First, Fallback to Network
+  // B) Bilder: Cache First
+  // WICHTIG: Wir prüfen lockerer, ob es ein Bild ist
   if (url.pathname.startsWith('/static/images/')) {
     event.respondWith(
-      caches.match(event.request).then(cachedResponse => {
+      caches.match(event.request, {ignoreSearch: true}).then(cachedResponse => {
         if (cachedResponse) {
-          return cachedResponse; // Haben wir schon!
+          return cachedResponse;
         }
-        // Nicht im Cache? Versuchen zu holen
-        return fetch(event.request).then(networkResponse => {
+        return fetch(event.request).then(response => {
           return caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, networkResponse.clone());
-            return networkResponse;
+            cache.put(event.request, response.clone());
+            return response;
           });
         });
       })
@@ -66,6 +54,5 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // C) Alles andere
   event.respondWith(fetch(event.request));
 });

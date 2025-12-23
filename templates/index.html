@@ -65,14 +65,21 @@
                 // --- NEU: Hilfsfunktion zum Vorladen ---
                 function cacheAllMedia(mediaItems) {
                     if ('caches' in window) {
-                        caches.open('rahmen-cache-v1').then(cache => {
+                        caches.open('rahmen-cache-v2').then(cache => {
                             mediaItems.forEach(item => {
-                                const url = '/static/images/' + item.url;
-                                // Prüfen ob schon im Cache, wenn nicht -> Hinzufügen
-                                cache.match(url).then(response => {
+                                // WICHTIG: encodeURI sorgt dafür, dass Leerzeichen zu %20 werden,
+                                // genau so wie der Browser es später abruft.
+                                const rawUrl = '/static/images/' + item.url;
+                                const correctUrl = encodeURI(rawUrl); 
+
+                                cache.match(correctUrl).then(response => {
                                     if (!response) {
-                                        console.log("Lade herunter für Offline-Modus:", url);
-                                        cache.add(url).catch(e => console.log("Fehler beim Cachen von", url));
+                                        console.log("Lade herunter für Offline-Modus:", correctUrl);
+                                        // Wir müssen hier fetch benutzen und dann put, 
+                                        // weil cache.add() manchmal bei Redirects zickt
+                                        fetch(correctUrl).then(res => {
+                                            if(res.ok) cache.put(correctUrl, res);
+                                        }).catch(e => console.log("Fehler Caching:", e));
                                     }
                                 });
                             });
@@ -175,9 +182,17 @@
 
         // --- PWA / OFFLINE SUPPORT ---
         if ('serviceWorker' in navigator) {
+            // Unregister old workers first to be clean
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                for(let registration of registrations) {
+                    // Optional: Alte Worker entfernen, falls es Probleme gab
+                    // registration.unregister(); 
+                }
+            });
+
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/service-worker.js')
-                    .then(reg => console.log('Service Worker registriert!', reg))
+                    .then(reg => console.log('Service Worker v2 registriert!', reg))
                     .catch(err => console.log('Service Worker Fehler:', err));
             });
         }
