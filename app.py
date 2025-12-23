@@ -93,6 +93,15 @@ def worker_loop():
 threading.Thread(target=worker_loop, daemon=True).start()
 
 # --- Routen ---
+
+@app.route('/')
+def index(): return render_template('index.html')
+
+@app.route('/admin')
+def admin(): return render_template('admin.html')
+
+
+
 @app.route('/manifest.json')
 def manifest():
     return send_from_directory('static', 'manifest.json')
@@ -101,11 +110,24 @@ def manifest():
 def service_worker():
     return send_from_directory('static', 'service-worker.js')
 
-@app.route('/')
-def index(): return render_template('index.html')
+@app.route('/api/send_command', methods=['POST'])
+def send_command():
+    """Admin sendet Befehl (z.B. Reload oder Cache Fill)"""
+    cmd = request.json.get('command')
+    
+    if cmd == 'reload':
+        save_json(COMMAND_FILE, {"reload_requested": True})
+        return jsonify({"success": True})
+        
+    # NEU: Cache Befehl
+    elif cmd == 'fill_cache':
+        # Wir nutzen denselben Mechanismus wie beim Reload
+        # Wir schreiben den Befehl in die command.json, aber mit anderem Key/Value
+        save_json(COMMAND_FILE, {"custom_command": "fill_cache"})
+        return jsonify({"success": True})
+        
+    return jsonify({"error": "Unknown command"}), 400
 
-@app.route('/admin')
-def admin(): return render_template('admin.html')
 
 @app.route('/api/config', methods=['GET', 'POST'])
 def handle_config():

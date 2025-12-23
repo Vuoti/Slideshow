@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rahmen-cache-v2'; // Version hochgezählt!
+const CACHE_NAME = 'rahmen-cache-v3'; // Neue Version erzwingen
 
 const PRECACHE_URLS = [
   '/',
@@ -20,7 +20,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // A) API: Network First, dann Cache
+  // A) API & HTML: Erst Netzwerk, dann Cache
   if (url.pathname === '/' || url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(event.request)
@@ -35,10 +35,10 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // B) Bilder: Cache First
-  // WICHTIG: Wir prüfen lockerer, ob es ein Bild ist
+  // B) Bilder: Erst Cache, dann Netzwerk
   if (url.pathname.startsWith('/static/images/')) {
     event.respondWith(
+      // ignoreSearch hilft manchmal, ist aber nicht zwingend
       caches.match(event.request, {ignoreSearch: true}).then(cachedResponse => {
         if (cachedResponse) {
           return cachedResponse;

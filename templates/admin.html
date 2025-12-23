@@ -140,6 +140,10 @@
         </div>
     </div>
 
+    <button class="btn" style="width: auto; background: #FF9500; color: black; padding: 8px 15px; font-size: 0.9em; margin-right: 10px;" onclick="forceCacheFill()">
+        📥 Cache füllen
+    </button>
+
     <script>
         let currentFilename = '';
         let currentX = 50; let currentY = 50;
@@ -272,6 +276,20 @@
                 .then(() => { if(i === files.length -1) setTimeout(loadAll, 1000); });
             }
         }
+
+        function forceCacheFill() {
+            if(!confirm("Soll der Bilderrahmen jetzt alle Bilder herunterladen und cachen? Das kann kurz dauern.")) return;
+            
+            // Wir senden einen speziellen Befehl an das iPad
+            fetch('/api/send_command', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({command: 'fill_cache'})
+            }).then(() => {
+                alert("Befehl gesendet! Beobachte das iPad (oder die Logs).");
+            });
+        }
+
 
         loadAll();
     </script>

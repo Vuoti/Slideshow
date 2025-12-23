@@ -62,31 +62,40 @@
                     });
                 }
 
-                // --- NEU: Hilfsfunktion zum Vorladen ---
-                function cacheAllMedia(mediaItems) {
-                    if ('caches' in window) {
-                        caches.open('rahmen-cache-v2').then(cache => {
-                            mediaItems.forEach(item => {
-                                // WICHTIG: encodeURI sorgt dafür, dass Leerzeichen zu %20 werden,
-                                // genau so wie der Browser es später abruft.
-                                const rawUrl = '/static/images/' + item.url;
-                                const correctUrl = encodeURI(rawUrl); 
-
-                                cache.match(correctUrl).then(response => {
-                                    if (!response) {
-                                        console.log("Lade herunter für Offline-Modus:", correctUrl);
-                                        // Wir müssen hier fetch benutzen und dann put, 
-                                        // weil cache.add() manchmal bei Redirects zickt
-                                        fetch(correctUrl).then(res => {
-                                            if(res.ok) cache.put(correctUrl, res);
-                                        }).catch(e => console.log("Fehler Caching:", e));
-                                    }
-                                });
-                            });
-                        });
-                    }
+                // --- Hilfsfunktion zum Vorladen (ROBUST) ---
+                async function cacheAllMedia(mediaItems) {
+                    if (!('caches' in window)) return;
+                    
+                    console.log("Starte Caching von " + mediaItems.length + " Dateien...");
+                    const cache = await caches.open('rahmen-cache-v2');
+                    
+                    // Wir nutzen map, um alle Downloads parallel zu starten
+                    const promises = mediaItems.map(async item => {
+                        // Der Browser kümmert sich um Encoding (Leerzeichen etc.)
+                        const url = '/static/images/' + item.url;
+                        
+                        try {
+                            // Prüfen, ob schon da
+                            const match = await cache.match(url);
+                            if (match) {
+                                return; // Schon da, überspringen
+                            }
+                            
+                            // Neu laden und speichern
+                            // cache.add wirft einen Fehler, wenn der Status nicht 200 OK ist
+                            await cache.add(url);
+                            console.log("✅ Cached:", item.url);
+                        } catch (e) {
+                            console.error("❌ Fehler beim Caching von:", item.url, e);
+                        }
+                    });
+                    
+                    await Promise.all(promises);
+                    console.log("Caching Durchlauf beendet.");
                 }
-        function updatePlaylist() {
+
+
+                function updatePlaylist() {
             // Priorität 1: Eingefrorenes Bild
             if (config.forced_image) {
                 // Finde das Bild in den Medien
