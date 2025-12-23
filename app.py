@@ -11,6 +11,7 @@ import numpy as np
 from flask import Flask, render_template, jsonify, request
 from PIL import Image, ExifTags, ImageOps
 from pillow_heif import register_heif_opener
+from flask import Flask, render_template, jsonify, request, send_from_directory
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -92,6 +93,14 @@ def worker_loop():
 threading.Thread(target=worker_loop, daemon=True).start()
 
 # --- Routen ---
+@app.route('/manifest.json')
+def manifest():
+    return send_from_directory('static', 'manifest.json')
+
+@app.route('/service-worker.js')
+def service_worker():
+    return send_from_directory('static', 'service-worker.js')
+
 @app.route('/')
 def index(): return render_template('index.html')
 
