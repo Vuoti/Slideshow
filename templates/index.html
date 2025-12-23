@@ -25,77 +25,68 @@
         var playlist = [];
         var currentIndex = -1;
         var activeContainerId = 'container1';
-        var latestImageId = null; // Um neue Uploads zu erkennen
+        var latestImageId = null;
         
         var config = { duration: 10, mode: 'slideshow', newest_count: 5, brightness: 100, night_mode: false };
 
+        // --- RAM SCHUTZ: Seite alle 4 Stunden komplett neu laden ---
+        // Das verhindert, dass der Speicher voll läuft (Memory Leak Protection)
+        setTimeout(() => {
+            console.log("Wartungs-Reload für RAM-Bereinigung...");
+            window.location.reload();
+        }, 1000 * 60 * 60 * 4); 
+
+
         function fetchConfigAndImages() {
-                    Promise.all([
-                        fetch('/api/config').then(r => r.json()),
-                        fetch('/api/images').then(r => r.json())
-                    ]).then(([newConfig, newImages]) => {
-                        
-                        // --- NEU: Neuer Upload Check ---
-                        if (newImages.length > 0) {
-                            const currentTopImage = newImages[0].url;
-                            if (latestImageId !== null && latestImageId !== currentTopImage) {
-                                console.log("Neues Bild entdeckt! Reset.");
-                                currentIndex = -1; 
-                            }
-                            latestImageId = currentTopImage;
-                        }
-
-                        config = newConfig;
-                        allMedia = newImages;
-                        
-                        // --- NEU: SOFORT ALLES CACHEN (Pre-Caching) ---
-                        // Das sorgt dafür, dass die Bilder verfügbar sind, BEVOR das Netz weg ist
-                        cacheAllMedia(newImages);
-
-                        updatePlaylist();
-                        updateBrightness();
-                    })
-                    .catch(err => {
-                        console.log("Offline oder API Fehler. Versuche mit vorhandenen Daten weiterzumachen.", err);
-                        // Wenn fetch fehlschlägt (weil Cache leer + offline), hoffen wir, 
-                        // dass wir schon Daten im Speicher hatten (allMedia)
-                    });
+            Promise.all([
+                fetch('/api/config').then(r => r.json()),
+                fetch('/api/images').then(r => r.json())
+            ]).then(([newConfig, newImages]) => {
+                
+                if (newImages.length > 0) {
+                    const currentTopImage = newImages[0].url;
+                    if (latestImageId !== null && latestImageId !== currentTopImage) {
+                        currentIndex = -1; 
+                    }
+                    latestImageId = currentTopImage;
                 }
 
-        // --- Robuste Caching Funktion ---
-        async function cacheAllMedia(mediaItems) {
-            if (!('caches' in window)) return;
-            
-            // HIER AUCH v3 BENUTZEN:
-            const cache = await caches.open('rahmen-cache-v3');
-            
-            console.log("Starte Auto-Download für Offline-Modus...");
-            
-            mediaItems.forEach(item => {
-                const url = '/static/images/' + item.url;
-                const encodedUrl = encodeURI(url); // Wichtig für Leerzeichen!
+                config = newConfig;
+                allMedia = newImages;
+                
+                // Cache für Offline-Modus befüllen
+                cacheAllMedia(newImages);
 
-                cache.match(encodedUrl).then(response => {
-                    // Nur laden, wenn noch nicht da
-                    if (!response) {
-                        cache.add(encodedUrl).catch(e => console.error("Fehler bei", item.url, e));
-                    }
-                });
+                updatePlaylist();
+                updateBrightness();
+            })
+            .catch(err => {
+                console.log("Offline Modus aktiv (oder API Fehler).", err);
             });
         }
 
-        function updatePlaylist() {
-            // Priorität 1: Eingefrorenes Bild
-            if (config.forced_image) {
-                // Finde das Bild in den Medien
-                const forced = allMedia.find(m => m.url === config.forced_image);
-                if (forced) {
-                    playlist = [forced];
-                    return;
-                }
-            }
+        // --- Robuste Caching Funktion (v3) ---
+        async function cacheAllMedia(mediaItems) {
+            if (!('caches' in window)) return;
+            try {
+                const cache = await caches.open('rahmen-cache-v3');
+                mediaItems.forEach(item => {
+                    const url = '/static/images/' + item.url;
+                    const encodedUrl = encodeURI(url);
+                    cache.match(encodedUrl).then(response => {
+                        if (!response) {
+                            cache.add(encodedUrl).catch(e => console.error("Fehler Caching:", item.url));
+                        }
+                    });
+                });
+            } catch(e) { console.log("Cache Fehler", e); }
+        }
 
-            // Priorität 2: Modus
+        function updatePlaylist() {
+            if (config.forced_image) {
+                const forced = allMedia.find(m => m.url === config.forced_image);
+                if (forced) { playlist = [forced]; return; }
+            }
             if (config.mode === 'newest') {
                 playlist = allMedia.slice(0, config.newest_count);
             } else {
@@ -118,23 +109,35 @@
             document.getElementById('brightness-overlay').style.opacity = 1 - (target / 100);
         }
 
+        // --- RAM CLEANUP HELPER ---
+        function cleanupContainer(container) {
+            // Sucht nach Videos im Container und stoppt sie explizit
+            const video = container.querySelector('video');
+            if (video) {
+                video.pause();
+                video.removeAttribute('src'); // Quelle entfernen
+                video.load(); // Leeren erzwingen
+            }
+            container.innerHTML = ''; // HTML entfernen
+        }
+
         function playNext() {
             if (playlist.length === 0) { setTimeout(playNext, 2000); return; }
 
-            // Nächster Index (Reset auf 0 wenn Ende oder neuer Upload)
             let nextIndex = (currentIndex + 1) % playlist.length;
-            if (nextIndex >= playlist.length) nextIndex = 0; // Fallback falls Playlist kürzer wurde
-
-            // Wenn wir im "Forced" Modus sind, bleiben wir immer bei 0
+            if (nextIndex >= playlist.length) nextIndex = 0; 
             if (playlist.length === 1) nextIndex = 0;
 
             var item = playlist[nextIndex];
             currentIndex = nextIndex;
 
-            var nextDiv = document.getElementById((activeContainerId === 'container1') ? 'container2' : 'container1');
-            var currDiv = document.getElementById(activeContainerId);
+            var nextContainerId = (activeContainerId === 'container1') ? 'container2' : 'container1';
+            var nextDiv = document.getElementById(nextContainerId);
+            var currentDiv = document.getElementById(activeContainerId);
             
-            nextDiv.innerHTML = '';
+            // WICHTIG: Speicher aufräumen bevor wir Neues reinladen
+            cleanupContainer(nextDiv);
+            
             var el;
             var duration = (isNightTime() ? (config.night_duration || config.duration) : config.duration) * 1000;
 
@@ -149,11 +152,8 @@
                    el.play().catch(e=>console.log(e));
                 };
                 
-                // Video Loop Logik
-                // Wenn Playlist nur 1 Element hat (Forced oder Newest=1) -> Loop
                 if (playlist.length === 1) {
                     el.loop = true;
-                    // Trotzdem ab und zu checken ob neuer Upload kam
                     setTimeout(playNext, 60000); 
                 } else {
                     el.onended = playNext;
@@ -174,24 +174,16 @@
         }
 
         fetchConfigAndImages();
-        setInterval(fetchConfigAndImages, 10000); // Check alle 10s (schneller für Instant Upload)
+        setInterval(fetchConfigAndImages, 10000); 
         setInterval(updateBrightness, 60000);
         setTimeout(playNext, 1000);
 
-        // --- PWA / OFFLINE SUPPORT ---
+        // PWA
         if ('serviceWorker' in navigator) {
-            // Unregister old workers first to be clean
-            navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                for(let registration of registrations) {
-                    // Optional: Alte Worker entfernen, falls es Probleme gab
-                    // registration.unregister(); 
-                }
-            });
-
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/service-worker.js')
-                    .then(reg => console.log('Service Worker v2 registriert!', reg))
-                    .catch(err => console.log('Service Worker Fehler:', err));
+                    .then(reg => console.log('Service Worker OK'))
+                    .catch(err => console.log('SW Fail', err));
             });
         }
     </script>
