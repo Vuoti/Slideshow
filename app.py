@@ -223,4 +223,4 @@ def download_cert():
 
 if __name__ == '__main__':
     # WICHTIG: Hier jetzt die echten Dateien nutzen statt 'adhoc'
-    app.run(host='0.0.0.0', port=5000, ssl_context=('cert.pem', 'key.pem'))
+    app.run(host='0.0.0.0', port=6001, ssl_context=('cert.pem', 'key.pem'))
