@@ -62,39 +62,25 @@
                     });
                 }
 
-                // --- Hilfsfunktion zum Vorladen (ROBUST) ---
+                // --- Robuste Caching Funktion ---
                 async function cacheAllMedia(mediaItems) {
                     if (!('caches' in window)) return;
                     
-                    console.log("Starte Caching von " + mediaItems.length + " Dateien...");
-                    const cache = await caches.open('rahmen-cache-v2');
+                    // WICHTIG: Hier muss 'rahmen-cache-v3' stehen, genau wie im Service Worker!
+                    const cache = await caches.open('rahmen-cache-v3');
                     
-                    // Wir nutzen map, um alle Downloads parallel zu starten
-                    const promises = mediaItems.map(async item => {
-                        // Der Browser kümmert sich um Encoding (Leerzeichen etc.)
+                    mediaItems.forEach(item => {
                         const url = '/static/images/' + item.url;
-                        
-                        try {
-                            // Prüfen, ob schon da
-                            const match = await cache.match(url);
-                            if (match) {
-                                return; // Schon da, überspringen
+                        const encodedUrl = encodeURI(url);
+
+                        cache.match(encodedUrl).then(response => {
+                            if (!response) {
+                                console.log("Lade herunter für Offline:", item.url);
+                                cache.add(encodedUrl).catch(e => console.error("Fehler bei", item.url, e));
                             }
-                            
-                            // Neu laden und speichern
-                            // cache.add wirft einen Fehler, wenn der Status nicht 200 OK ist
-                            await cache.add(url);
-                            console.log("✅ Cached:", item.url);
-                        } catch (e) {
-                            console.error("❌ Fehler beim Caching von:", item.url, e);
-                        }
+                        });
                     });
-                    
-                    await Promise.all(promises);
-                    console.log("Caching Durchlauf beendet.");
                 }
-
-
                 function updatePlaylist() {
             // Priorität 1: Eingefrorenes Bild
             if (config.forced_image) {

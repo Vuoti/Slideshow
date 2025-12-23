@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rahmen-cache-v3'; // Neue Version erzwingen
+const CACHE_NAME = 'rahmen-cache-v3'; // Unser Ziel-Cache
 
 const PRECACHE_URLS = [
   '/',
@@ -13,14 +13,26 @@ self.addEventListener('install', event => {
   );
 });
 
+// HIER IST DAS NEUE: Alte Caches (v1, v2) löschen!
 self.addEventListener('activate', event => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('Lösche alten Cache:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // A) API & HTML: Erst Netzwerk, dann Cache
+  // A) API & HTML
   if (url.pathname === '/' || url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(event.request)
@@ -35,10 +47,9 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // B) Bilder: Erst Cache, dann Netzwerk
+  // B) Bilder
   if (url.pathname.startsWith('/static/images/')) {
     event.respondWith(
-      // ignoreSearch hilft manchmal, ist aber nicht zwingend
       caches.match(event.request, {ignoreSearch: true}).then(cachedResponse => {
         if (cachedResponse) {
           return cachedResponse;
