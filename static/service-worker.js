@@ -1,40 +1,60 @@
 const CACHE_NAME = 'rahmen-cache-v1';
 
-// Dateien, die sofort beim Start gespeichert werden sollen (die "App-Hülle")
+// Diese Dateien sind Pflicht für die App-Hülle
 const PRECACHE_URLS = [
   '/',
   '/static/manifest.json',
-  '/static/icon.png' 
-  // index.html wird implizit durch '/' gecacht
+  '/static/icon.png',
+  // Hier keine Bilder listen, das machen wir dynamisch!
 ];
 
-// 1. Installieren: Grundgerüst cachen
+// 1. Installieren
 self.addEventListener('install', event => {
+  self.skipWaiting(); // Sofort aktivieren, nicht warten
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(PRECACHE_URLS))
-      .then(() => self.skipWaiting())
   );
 });
 
-// 2. Aktivieren: Alte Caches aufräumen (falls wir Version v2 machen)
+// 2. Aktivieren
 self.addEventListener('activate', event => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(self.clients.claim()); // Sofort Kontrolle über alle Tabs übernehmen
 });
 
-// 3. Fetch: Jeder Netzwerkaufruf geht hier durch
+// 3. Fetch (Der Türsteher)
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // A) Ist es ein Bild oder Video aus unserem Static-Ordner?
-  // Strategie: Cache First, falling back to Network
+  // A) API-Anfragen (Config & Bilderliste)
+  // Strategie: Network First, Fallback to Cache
+  if (url.pathname === '/' || url.pathname.startsWith('/api/')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(networkResponse => {
+          // Wenn Netzwerk erfolgreich: Antwort klonen und in Cache legen
+          return caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, networkResponse.clone());
+            return networkResponse;
+          });
+        })
+        .catch(() => {
+          // Wenn Netzwerk tot: Aus Cache holen
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+
+  // B) Bilder/Videos (aus /static/images/)
+  // Strategie: Cache First, Fallback to Network
   if (url.pathname.startsWith('/static/images/')) {
     event.respondWith(
       caches.match(event.request).then(cachedResponse => {
         if (cachedResponse) {
-          return cachedResponse; // Super! Haben wir schon.
+          return cachedResponse; // Haben wir schon!
         }
-        // Nicht im Cache? Holen, dann speichern.
+        // Nicht im Cache? Versuchen zu holen
         return fetch(event.request).then(networkResponse => {
           return caches.open(CACHE_NAME).then(cache => {
             cache.put(event.request, networkResponse.clone());
@@ -46,25 +66,6 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // B) Ist es die API oder die Hauptseite?
-  // Strategie: Network First (wir wollen ja wissen, ob es neue Bilder gibt), falling back to Cache
-  if (url.pathname === '/' || url.pathname.startsWith('/api/')) {
-    event.respondWith(
-      fetch(event.request)
-        .then(networkResponse => {
-          return caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, networkResponse.clone());
-            return networkResponse;
-          });
-        })
-        .catch(() => {
-          // Internet weg? Dann nimm das alte Zeug aus dem Cache
-          return caches.match(event.request);
-        })
-    );
-    return;
-  }
-
-  // C) Alles andere (z.B. Admin Panel) -> Einfach durchlassen
+  // C) Alles andere
   event.respondWith(fetch(event.request));
 });

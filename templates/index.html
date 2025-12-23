@@ -30,32 +30,55 @@
         var config = { duration: 10, mode: 'slideshow', newest_count: 5, brightness: 100, night_mode: false };
 
         function fetchConfigAndImages() {
-            Promise.all([
-                fetch('/api/config').then(r => r.json()),
-                fetch('/api/images').then(r => r.json())
-            ]).then(([newConfig, newImages]) => {
-                
-                // 1. Neuer Upload Check
-                // Wenn wir Bilder haben und das neuste Bild anders ist als beim letzten Check
-                if (newImages.length > 0) {
-                    const currentTopImage = newImages[0].url;
-                    if (latestImageId !== null && latestImageId !== currentTopImage) {
-                        console.log("Neues Bild entdeckt! Zeige sofort an.");
-                        // Wir erzwingen, dass das nächste Bild Index 0 ist (das Neue)
-                        currentIndex = -1; 
-                        // Optional: Sofortigen Wechsel auslösen (hier warten wir einfach bis der Timer abläuft, 
-                        // aber da currentIndex resetet ist, kommt das neue Bild als nächstes)
-                    }
-                    latestImageId = currentTopImage;
+                    Promise.all([
+                        fetch('/api/config').then(r => r.json()),
+                        fetch('/api/images').then(r => r.json())
+                    ]).then(([newConfig, newImages]) => {
+                        
+                        // --- NEU: Neuer Upload Check ---
+                        if (newImages.length > 0) {
+                            const currentTopImage = newImages[0].url;
+                            if (latestImageId !== null && latestImageId !== currentTopImage) {
+                                console.log("Neues Bild entdeckt! Reset.");
+                                currentIndex = -1; 
+                            }
+                            latestImageId = currentTopImage;
+                        }
+
+                        config = newConfig;
+                        allMedia = newImages;
+                        
+                        // --- NEU: SOFORT ALLES CACHEN (Pre-Caching) ---
+                        // Das sorgt dafür, dass die Bilder verfügbar sind, BEVOR das Netz weg ist
+                        cacheAllMedia(newImages);
+
+                        updatePlaylist();
+                        updateBrightness();
+                    })
+                    .catch(err => {
+                        console.log("Offline oder API Fehler. Versuche mit vorhandenen Daten weiterzumachen.", err);
+                        // Wenn fetch fehlschlägt (weil Cache leer + offline), hoffen wir, 
+                        // dass wir schon Daten im Speicher hatten (allMedia)
+                    });
                 }
 
-                config = newConfig;
-                allMedia = newImages;
-                updatePlaylist();
-                updateBrightness();
-            });
-        }
-
+                // --- NEU: Hilfsfunktion zum Vorladen ---
+                function cacheAllMedia(mediaItems) {
+                    if ('caches' in window) {
+                        caches.open('rahmen-cache-v1').then(cache => {
+                            mediaItems.forEach(item => {
+                                const url = '/static/images/' + item.url;
+                                // Prüfen ob schon im Cache, wenn nicht -> Hinzufügen
+                                cache.match(url).then(response => {
+                                    if (!response) {
+                                        console.log("Lade herunter für Offline-Modus:", url);
+                                        cache.add(url).catch(e => console.log("Fehler beim Cachen von", url));
+                                    }
+                                });
+                            });
+                        });
+                    }
+                }
         function updatePlaylist() {
             // Priorität 1: Eingefrorenes Bild
             if (config.forced_image) {
