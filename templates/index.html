@@ -62,26 +62,29 @@
                     });
                 }
 
-                // --- Robuste Caching Funktion ---
-                async function cacheAllMedia(mediaItems) {
-                    if (!('caches' in window)) return;
-                    
-                    // WICHTIG: Hier muss 'rahmen-cache-v3' stehen, genau wie im Service Worker!
-                    const cache = await caches.open('rahmen-cache-v3');
-                    
-                    mediaItems.forEach(item => {
-                        const url = '/static/images/' + item.url;
-                        const encodedUrl = encodeURI(url);
+        // --- Robuste Caching Funktion ---
+        async function cacheAllMedia(mediaItems) {
+            if (!('caches' in window)) return;
+            
+            // HIER AUCH v3 BENUTZEN:
+            const cache = await caches.open('rahmen-cache-v3');
+            
+            console.log("Starte Auto-Download für Offline-Modus...");
+            
+            mediaItems.forEach(item => {
+                const url = '/static/images/' + item.url;
+                const encodedUrl = encodeURI(url); // Wichtig für Leerzeichen!
 
-                        cache.match(encodedUrl).then(response => {
-                            if (!response) {
-                                console.log("Lade herunter für Offline:", item.url);
-                                cache.add(encodedUrl).catch(e => console.error("Fehler bei", item.url, e));
-                            }
-                        });
-                    });
-                }
-                function updatePlaylist() {
+                cache.match(encodedUrl).then(response => {
+                    // Nur laden, wenn noch nicht da
+                    if (!response) {
+                        cache.add(encodedUrl).catch(e => console.error("Fehler bei", item.url, e));
+                    }
+                });
+            });
+        }
+
+        function updatePlaylist() {
             // Priorität 1: Eingefrorenes Bild
             if (config.forced_image) {
                 // Finde das Bild in den Medien

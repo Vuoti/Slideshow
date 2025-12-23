@@ -1,4 +1,5 @@
-const CACHE_NAME = 'rahmen-cache-v3'; // Unser Ziel-Cache
+// WICHTIG: Hier muss derselbe Name stehen wie in der index.html!
+const CACHE_NAME = 'rahmen-cache-v3';
 
 const PRECACHE_URLS = [
   '/',
@@ -7,13 +8,13 @@ const PRECACHE_URLS = [
 ];
 
 self.addEventListener('install', event => {
-  self.skipWaiting();
+  self.skipWaiting(); // Sofort aktivieren
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE_URLS))
   );
 });
 
-// HIER IST DAS NEUE: Alte Caches (v1, v2) löschen!
+// Alte Caches löschen (Aufräumen)
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -32,7 +33,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // A) API & HTML
+  // A) API & HTML (Config, Liste)
   if (url.pathname === '/' || url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(event.request)

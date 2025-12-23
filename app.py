@@ -217,6 +217,10 @@ def upload_image():
             return jsonify({"success": True, "filename": unique_filename})
     return jsonify({"error": "No file"}), 400
 
+@app.route('/cert.pem')
+def download_cert():
+    return send_from_directory('.', 'cert.pem')
+
 if __name__ == '__main__':
-    # ssl_context='adhoc' erzeugt ein sofortiges HTTPS Zertifikat
-    app.run(host='0.0.0.0', port=6001, ssl_context='adhoc')
+    # WICHTIG: Hier jetzt die echten Dateien nutzen statt 'adhoc'
+    app.run(host='0.0.0.0', port=5000, ssl_context=('cert.pem', 'key.pem'))
