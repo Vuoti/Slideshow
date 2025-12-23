@@ -12,12 +12,6 @@
         /* Layout */
         .container { max-width: 1200px; margin: 0 auto; }
         
-        /* Status Bar (Active Freeze) */
-        #freeze-bar { 
-            background: var(--accent); color: white; padding: 15px; border-radius: 12px; margin-bottom: 20px; 
-            display: none; align-items: center; justify-content: space-between; box-shadow: 0 4px 15px rgba(0,122,255,0.4);
-        }
-        
         /* Settings Cards */
         .settings-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px; }
         .card { background: var(--card); padding: 20px; border-radius: 12px; }
@@ -38,18 +32,46 @@
 
         /* Grid */
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
-        .grid-item { position: relative; aspect-ratio: 1/1; border-radius: 8px; overflow: hidden; cursor: pointer; border: 3px solid transparent; transition: 0.2s; }
-        .grid-item:hover { transform: scale(1.02); }
+        .grid-item { position: relative; aspect-ratio: 1/1; border-radius: 8px; overflow: hidden; cursor: pointer; border: 3px solid transparent; transition: 0.2s; background: #000; }
+        .grid-item:hover { transform: scale(1.02); border-color: var(--accent); }
         .grid-item.active-freeze { border-color: var(--success); box-shadow: 0 0 15px var(--success); }
-        .grid-item img { width: 100%; height: 100%; object-fit: cover; }
+        .grid-item img, .grid-item video { width: 100%; height: 100%; object-fit: cover; display: block; }
         
+        /* Status Bar */
+        #freeze-bar { 
+            background: var(--accent); color: white; padding: 15px; border-radius: 12px; margin-bottom: 20px; 
+            display: none; align-items: center; justify-content: space-between; box-shadow: 0 4px 15px rgba(0,122,255,0.4);
+        }
+
         /* Editor Modal */
-        #editor { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 100; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; }
-        #editor-img-container { position: relative; max-width: 100%; max-height: 60vh; border: 2px solid #555; overflow: hidden; border-radius: 8px; margin-bottom: 20px; }
-        #editor-img { max-width: 100%; max-height: 60vh; display: block; }
+        #editor { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 100; flex-direction: column; align-items: center; justify-content: flex-start; padding: 20px; box-sizing: border-box; overflow-y: auto; }
+        
+        /* Editor Bereich (Source) */
+        .editor-source-wrapper { position: relative; max-width: 100%; max-height: 50vh; border: 2px solid #555; overflow: hidden; border-radius: 8px; margin-bottom: 20px; cursor: crosshair; }
+        #editor-img, #editor-video { max-width: 100%; max-height: 50vh; display: block; }
         #focus-point { position: absolute; width: 30px; height: 30px; background: rgba(255, 0, 0, 0.6); border: 2px solid white; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 10px black; }
         
-        .editor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: 500px; }
+        /* Live Vorschau Bereich */
+        .preview-container { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 500px; margin-bottom: 20px; }
+        .preview-label { color: #aaa; font-size: 0.8em; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
+        
+        /* Der iPad Simulator (4:3 Ratio) */
+        .ipad-simulator { 
+            width: 100%; 
+            aspect-ratio: 4/3; 
+            background: #000; 
+            border: 4px solid #333; 
+            border-radius: 12px; 
+            overflow: hidden; 
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .ipad-simulator img, .ipad-simulator video {
+            width: 100%; height: 100%; object-fit: cover;
+            transition: object-position 0.2s ease-out; /* Weicher Übergang bei Klick */
+        }
+
+        .editor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: 500px; margin-bottom: 50px; }
         .btn-freeze { background: var(--success); color: black; grid-column: span 2; }
     </style>
 </head>
@@ -57,7 +79,7 @@
     <div class="container">
         
         <div id="freeze-bar">
-            <span>❄️ Ein Bild ist gerade eingefroren!</span>
+            <span>❄️ <b>Ein Bild ist fixiert!</b></span>
             <button class="btn" style="width: auto; background: white; color: black; padding: 5px 15px;" onclick="unfreeze()">Lösen</button>
         </div>
 
@@ -116,7 +138,7 @@
         </div>
 
         <button class="btn btn-upload" onclick="document.getElementById('fileInput').click()">
-            📸 Neues Bild hochladen
+            📸 Neues Bild/Video hochladen
         </button>
         <input type="file" id="fileInput" multiple style="display:none" onchange="uploadFiles(this.files)">
 
@@ -124,14 +146,23 @@
     </div>
 
     <div id="editor">
-        <h3 style="margin-bottom: 10px;">Bild bearbeiten</h3>
-        <p style="font-size: 0.8em; color: #aaa; margin-top: -10px; margin-bottom: 10px;">Klicke auf das Gesicht, um den Fokus zu setzen.</p>
+        <h3 style="margin-bottom: 5px;">Ausschnitt wählen</h3>
+        <p style="font-size: 0.8em; color: #aaa; margin-top: 0; margin-bottom: 15px;">Klicke in das obere Bild, um den Mittelpunkt festzulegen.</p>
         
-        <div id="editor-img-container" onclick="setFocus(event)">
-            <img id="editor-img" src="">
+        <div class="editor-source-wrapper" onclick="setFocus(event)">
+            <img id="editor-img" src="" style="display:none;">
+            <video id="editor-video" src="" muted loop playsinline style="display:none;"></video>
             <div id="focus-point"></div>
         </div>
         
+        <div class="preview-container">
+            <div class="preview-label">Live Vorschau (iPad 4:3)</div>
+            <div class="ipad-simulator">
+                <img id="preview-img" src="" style="display:none;">
+                <video id="preview-video" src="" muted loop playsinline style="display:none;"></video>
+            </div>
+        </div>
+
         <div class="editor-actions">
             <button class="btn btn-freeze" onclick="freezeImage()">✨ NUR DIESES ANZEIGEN</button>
             <button class="btn btn-primary" onclick="saveCrop()">Speichern</button>
@@ -142,6 +173,7 @@
 
     <script>
         let currentFilename = '';
+        let currentType = 'image'; // 'image' oder 'video'
         let currentX = 50; let currentY = 50;
         let globalConfig = {};
 
@@ -166,13 +198,15 @@
                 const bar = document.getElementById('freeze-bar');
                 if (data.forced_image) {
                     bar.style.display = 'flex';
-                    bar.innerHTML = `<span>❄️ <b>${data.forced_image}</b> wird dauerhaft angezeigt!</span> <button class="btn" style="width: auto; background: white; color: black; padding: 5px 15px;" onclick="unfreeze()">Lösen</button>`;
+                    // Finde Namen im Text
+                    const shortName = data.forced_image.length > 20 ? '...' + data.forced_image.slice(-15) : data.forced_image;
+                    bar.innerHTML = `<span>❄️ <b>${shortName}</b> wird dauerhaft angezeigt!</span> <button class="btn" style="width: auto; background: white; color: black; padding: 5px 15px;" onclick="unfreeze()">Lösen</button>`;
                 } else {
                     bar.style.display = 'none';
                 }
 
                 toggleNewestCount();
-                loadImages(); // Grid laden nachdem Config da ist (wegen Highlight)
+                loadImages(); 
             });
         }
 
@@ -180,13 +214,22 @@
             fetch('/api/images').then(r=>r.json()).then(data => {
                 const grid = document.getElementById('grid');
                 grid.innerHTML = '';
-                data.forEach(img => {
+                data.forEach(item => {
                     const div = document.createElement('div');
                     div.className = 'grid-item';
-                    if (globalConfig.forced_image === img.url) div.classList.add('active-freeze');
+                    if (globalConfig.forced_image === item.url) div.classList.add('active-freeze');
                     
-                    div.innerHTML = `<img src="/static/images/${img.url}" style="object-position: ${img.focus_x}% ${img.focus_y}%">`;
-                    div.onclick = () => openEditor(img);
+                    // Unterscheidung Video vs Bild im Grid
+                    let contentHTML = '';
+                    if (item.type === 'video') {
+                        // Video: Muted, Loop, spielt beim Hovern
+                        contentHTML = `<video src="/static/images/${item.url}" muted loop playsinline onmouseover="this.play()" onmouseout="this.pause()" style="object-position: ${item.focus_x}% ${item.focus_y}%"></video>`;
+                    } else {
+                        contentHTML = `<img src="/static/images/${item.url}" loading="lazy" style="object-position: ${item.focus_x}% ${item.focus_y}%">`;
+                    }
+
+                    div.innerHTML = contentHTML;
+                    div.onclick = () => openEditor(item);
                     grid.appendChild(div);
                 });
             });
@@ -208,7 +251,6 @@
                 night_end: document.getElementById('nightEndInput').value,
                 night_duration: parseInt(document.getElementById('nightDurationInput').value),
                 night_brightness: parseInt(document.getElementById('nightBrightnessInput').value)
-                // forced_image wird hier NICHT überschrieben, das passiert nur via freeze/unfreeze
             };
 
             fetch('/api/config', {
@@ -222,7 +264,6 @@
 
         // --- Freeze Logic ---
         function freezeImage() {
-            // Wir laden die aktuelle Config, setzen forced_image und speichern zurück
             const newConfig = { ...globalConfig, forced_image: currentFilename };
             saveSettings(newConfig);
             closeEditor();
@@ -233,26 +274,88 @@
             saveSettings(newConfig);
         }
 
-        // --- Editor ---
-        function openEditor(imgData) {
-            currentFilename = imgData.url;
-            currentX = imgData.focus_x; currentY = imgData.focus_y;
-            const img = document.getElementById('editor-img');
-            img.src = '/static/images/' + imgData.url;
+        // --- Editor mit Video Support ---
+        function openEditor(item) {
+            currentFilename = item.url;
+            currentType = item.type;
+            currentX = item.focus_x; 
+            currentY = item.focus_y;
+
+            // Elemente holen
+            const editImg = document.getElementById('editor-img');
+            const editVid = document.getElementById('editor-video');
+            const prevImg = document.getElementById('preview-img');
+            const prevVid = document.getElementById('preview-video');
+
+            const url = '/static/images/' + item.url;
+
+            if (item.type === 'video') {
+                // Video Mode aktivieren
+                editImg.style.display = 'none';
+                prevImg.style.display = 'none';
+                
+                editVid.style.display = 'block';
+                prevVid.style.display = 'block';
+                
+                editVid.src = url;
+                prevVid.src = url;
+                
+                // Videos abspielen im Editor
+                editVid.play(); 
+                prevVid.play();
+
+                editVid.onloadeddata = updateCrosshair;
+
+            } else {
+                // Bild Mode aktivieren
+                editVid.style.display = 'none';
+                prevVid.style.display = 'none';
+                
+                editImg.style.display = 'block';
+                prevImg.style.display = 'block';
+                
+                editImg.src = url;
+                prevImg.src = url;
+                
+                editImg.onload = updateCrosshair;
+            }
+
             document.getElementById('editor').style.display = 'flex';
-            img.onload = updateCrosshair;
+            updateCrosshair(); // Initiale Position setzen
         }
 
         function setFocus(event) {
-            const rect = event.target.getBoundingClientRect();
-            currentX = Math.round(((event.clientX - rect.left) / rect.width) * 100);
-            currentY = Math.round(((event.clientY - rect.top) / rect.height) * 100);
+            // Wir berechnen die Position relativ zum Container (.editor-source-wrapper)
+            const wrapper = event.currentTarget;
+            const rect = wrapper.getBoundingClientRect();
+            
+            // Verhindern von Werten außerhalb (0-100%)
+            let x = ((event.clientX - rect.left) / rect.width) * 100;
+            let y = ((event.clientY - rect.top) / rect.height) * 100;
+            
+            currentX = Math.round(Math.max(0, Math.min(100, x)));
+            currentY = Math.round(Math.max(0, Math.min(100, y)));
+            
             updateCrosshair();
         }
+
         function updateCrosshair() {
+            // 1. Roten Punkt verschieben
             const point = document.getElementById('focus-point');
-            point.style.left = currentX + '%'; point.style.top = currentY + '%';
+            point.style.left = currentX + '%'; 
+            point.style.top = currentY + '%';
+
+            // 2. Live Vorschau aktualisieren (Magie!)
+            // Wir wenden die Koordinaten direkt auf das object-position der Vorschau an
+            const posString = `${currentX}% ${currentY}%`;
+            
+            if (currentType === 'video') {
+                document.getElementById('preview-video').style.objectPosition = posString;
+            } else {
+                document.getElementById('preview-img').style.objectPosition = posString;
+            }
         }
+
         function saveCrop() {
             fetch('/api/update_crop', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ filename: currentFilename, x: currentX, y: currentY }) })
             .then(() => { closeEditor(); loadImages(); });
@@ -262,7 +365,12 @@
             fetch('/api/delete', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ filename: currentFilename }) })
             .then(() => { closeEditor(); loadAll(); });
         }
-        function closeEditor() { document.getElementById('editor').style.display = 'none'; }
+        function closeEditor() { 
+            document.getElementById('editor').style.display = 'none'; 
+            // Videos stoppen um Ressouren zu sparen
+            document.getElementById('editor-video').pause();
+            document.getElementById('preview-video').pause();
+        }
         
         function uploadFiles(files) {
             const formData = new FormData();
@@ -272,7 +380,6 @@
                 .then(() => { if(i === files.length -1) setTimeout(loadAll, 1000); });
             }
         }
-
 
         loadAll();
     </script>
