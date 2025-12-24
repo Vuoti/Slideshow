@@ -5,7 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bilderrahmen Admin</title>
     <style>
-        :root { --accent: #007aff; --bg: #1c1c1e; --card: #2c2c2e; --text: #f2f2f7; --danger: #ff453a; --success: #32d74b; }
+        :root { 
+            --accent: #007aff; 
+            --bg: #1c1c1e; 
+            --card: #2c2c2e; 
+            --text: #f2f2f7; 
+            --danger: #ff453a; 
+            --success: #32d74b; 
+            /* Ziel-Format: 3 / 3.5 */
+            --aspect-ratio: 3 / 3.5; 
+        }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; }
         h3, h4 { margin-top: 0; }
         
@@ -21,7 +30,7 @@
         input[type="range"] { padding: 0; }
         .row { display: flex; gap: 10px; }
         
-        /* Upload & Save Buttons */
+        /* Buttons */
         .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1em; transition: transform 0.1s; }
         .btn:active { transform: scale(0.98); }
         .btn-primary { background: var(--accent); color: white; }
@@ -31,11 +40,15 @@
         .btn-upload:hover { border-color: var(--accent); color: var(--accent); }
 
         /* Grid */
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
-        .grid-item { position: relative; aspect-ratio: 1/1; border-radius: 8px; overflow: hidden; cursor: pointer; border: 3px solid transparent; transition: 0.2s; background: #000; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+        .grid-item { 
+            position: relative; 
+            aspect-ratio: var(--aspect-ratio); /* Neues Format */
+            border-radius: 8px; overflow: hidden; cursor: pointer; border: 3px solid transparent; transition: 0.2s; background: #000; 
+        }
         .grid-item:hover { transform: scale(1.02); border-color: var(--accent); }
         .grid-item.active-freeze { border-color: var(--success); box-shadow: 0 0 15px var(--success); }
-        .grid-item img, .grid-item video { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .grid-item img, .grid-item video { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
         
         /* Status Bar */
         #freeze-bar { 
@@ -46,32 +59,33 @@
         /* Editor Modal */
         #editor { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 100; flex-direction: column; align-items: center; justify-content: flex-start; padding: 20px; box-sizing: border-box; overflow-y: auto; }
         
-        /* Editor Bereich (Source) */
-        .editor-source-wrapper { position: relative; max-width: 100%; max-height: 50vh; border: 2px solid #555; overflow: hidden; border-radius: 8px; margin-bottom: 20px; cursor: crosshair; }
-        #editor-img, #editor-video { max-width: 100%; max-height: 50vh; display: block; }
-        #focus-point { position: absolute; width: 30px; height: 30px; background: rgba(255, 0, 0, 0.6); border: 2px solid white; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 10px black; }
+        /* Editor Bereich */
+        .editor-wrapper { position: relative; max-width: 90vw; max-height: 70vh; margin-bottom: 20px; overflow: hidden; border-radius: 4px; box-shadow: 0 0 20px rgba(0,0,0,0.5); cursor: crosshair; }
         
-        /* Live Vorschau Bereich */
-        .preview-container { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 500px; margin-bottom: 20px; }
-        .preview-label { color: #aaa; font-size: 0.8em; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
-        
-        /* Der iPad Simulator (4:3 Ratio) */
-        .ipad-simulator { 
-            width: 20%; 
-            aspect-ratio: 3/ 3.5; 
-            background: #000; 
-            border: 4px solid #333; 
-            border-radius: 12px; 
-            overflow: hidden; 
-            position: relative;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        /* Das Bild/Video im Editor (wird voll angezeigt) */
+        #editor-img, #editor-video { max-width: 100%; max-height: 70vh; display: block; }
+
+        /* Die Crop Box (Der helle Bereich) */
+        #crop-box {
+            position: absolute;
+            top: 0; left: 0;
+            border: 2px solid var(--success);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7); /* Der Trick: Alles außerhalb wird dunkel */
+            pointer-events: none; /* Klicks gehen durch zum Wrapper */
+            transition: all 0.1s ease-out;
         }
-        .ipad-simulator img, .ipad-simulator video {
-            width: 100%; height: 100%; object-fit: cover;
-            transition: object-position 0.2s ease-out; /* Weicher Übergang bei Klick */
+        
+        /* Roter Punkt in der Mitte der Crop Box */
+        #focus-indicator {
+            position: absolute;
+            width: 10px; height: 10px;
+            background: red; border-radius: 50%;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 5px white;
         }
 
-        .editor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: 500px; margin-bottom: 50px; }
+        .editor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: 400px; margin-bottom: 50px; }
         .btn-freeze { background: var(--success); color: black; grid-column: span 2; }
     </style>
 </head>
@@ -146,23 +160,18 @@
     </div>
 
     <div id="editor">
-        <h3 style="margin-bottom: 5px;">Ausschnitt wählen</h3>
-        <p style="font-size: 0.8em; color: #aaa; margin-top: 0; margin-bottom: 15px;">Klicke in das obere Bild, um den Mittelpunkt festzulegen.</p>
+        <h3 style="margin-bottom: 5px;">Ausschnitt anpassen</h3>
+        <p style="font-size: 0.8em; color: #aaa; margin-top: 0; margin-bottom: 15px;">Klicke in das Bild, um den sichtbaren Bereich zu verschieben.</p>
         
-        <div class="editor-source-wrapper" onclick="setFocus(event)">
+        <div class="editor-wrapper" onclick="setFocus(event)" id="editor-wrapper">
             <img id="editor-img" src="" style="display:none;">
             <video id="editor-video" src="" muted loop playsinline style="display:none;"></video>
-            <div id="focus-point"></div>
-        </div>
-        
-        <div class="preview-container">
-            <div class="preview-label">Live Vorschau (iPad 4:3)</div>
-            <div class="ipad-simulator">
-                <img id="preview-img" src="" style="display:none;">
-                <video id="preview-video" src="" muted loop playsinline style="display:none;"></video>
+            
+            <div id="crop-box">
+                <div id="focus-indicator"></div>
             </div>
         </div>
-
+        
         <div class="editor-actions">
             <button class="btn btn-freeze" onclick="freezeImage()">✨ NUR DIESES ANZEIGEN</button>
             <button class="btn btn-primary" onclick="saveCrop()">Speichern</button>
@@ -173,14 +182,16 @@
 
     <script>
         let currentFilename = '';
-        let currentType = 'image'; // 'image' oder 'video'
+        let currentType = 'image';
         let currentX = 50; let currentY = 50;
         let globalConfig = {};
+        
+        // ZIEL ASPECT RATIO: 3 / 3.5 = 0.85714
+        const TARGET_RATIO = 3 / 3.5;
 
         function loadAll() {
             fetch('/api/config').then(r=>r.json()).then(data => {
                 globalConfig = data;
-                
                 // Inputs füllen
                 document.getElementById('durationInput').value = data.duration;
                 document.getElementById('modeInput').value = data.mode;
@@ -194,13 +205,11 @@
                 document.getElementById('nightBrightnessInput').value = data.night_brightness;
                 document.getElementById('nightBrightVal').innerText = data.night_brightness;
 
-                // Freeze Bar Logik
                 const bar = document.getElementById('freeze-bar');
                 if (data.forced_image) {
                     bar.style.display = 'flex';
-                    // Finde Namen im Text
                     const shortName = data.forced_image.length > 20 ? '...' + data.forced_image.slice(-15) : data.forced_image;
-                    bar.innerHTML = `<span>❄️ <b>${shortName}</b> wird dauerhaft angezeigt!</span> <button class="btn" style="width: auto; background: white; color: black; padding: 5px 15px;" onclick="unfreeze()">Lösen</button>`;
+                    bar.innerHTML = `<span>❄️ <b>${shortName}</b> ist fixiert!</span> <button class="btn" style="width: auto; background: white; color: black; padding: 5px 15px;" onclick="unfreeze()">Lösen</button>`;
                 } else {
                     bar.style.display = 'none';
                 }
@@ -219,11 +228,10 @@
                     div.className = 'grid-item';
                     if (globalConfig.forced_image === item.url) div.classList.add('active-freeze');
                     
-                    // Unterscheidung Video vs Bild im Grid
                     let contentHTML = '';
                     if (item.type === 'video') {
-                        // Video: Muted, Loop, spielt beim Hovern
-                        contentHTML = `<video src="/static/images/${item.url}" muted loop playsinline onmouseover="this.play()" onmouseout="this.pause()" style="object-position: ${item.focus_x}% ${item.focus_y}%"></video>`;
+                        // KEIN Autoplay, KEIN Hover mehr. #t=0.1 erzwingt Vorschaubild von Sekunde 0.1
+                        contentHTML = `<video src="/static/images/${item.url}#t=0.1" preload="metadata" muted playsinline style="object-position: ${item.focus_x}% ${item.focus_y}%"></video>`;
                     } else {
                         contentHTML = `<img src="/static/images/${item.url}" loading="lazy" style="object-position: ${item.focus_x}% ${item.focus_y}%">`;
                     }
@@ -262,7 +270,6 @@
             });
         }
 
-        // --- Freeze Logic ---
         function freezeImage() {
             const newConfig = { ...globalConfig, forced_image: currentFilename };
             saveSettings(newConfig);
@@ -274,86 +281,89 @@
             saveSettings(newConfig);
         }
 
-        // --- Editor mit Video Support ---
+        // --- Editor Logik ---
         function openEditor(item) {
             currentFilename = item.url;
             currentType = item.type;
             currentX = item.focus_x; 
             currentY = item.focus_y;
 
-            // Elemente holen
             const editImg = document.getElementById('editor-img');
             const editVid = document.getElementById('editor-video');
-            const prevImg = document.getElementById('preview-img');
-            const prevVid = document.getElementById('preview-video');
-
             const url = '/static/images/' + item.url;
 
             if (item.type === 'video') {
-                // Video Mode aktivieren
                 editImg.style.display = 'none';
-                prevImg.style.display = 'none';
-                
                 editVid.style.display = 'block';
-                prevVid.style.display = 'block';
-                
                 editVid.src = url;
-                prevVid.src = url;
-                
-                // Videos abspielen im Editor
                 editVid.play(); 
-                prevVid.play();
-
-                editVid.onloadeddata = updateCrosshair;
-
+                editVid.onloadedmetadata = () => updateCropMask(editVid.videoWidth, editVid.videoHeight);
             } else {
-                // Bild Mode aktivieren
                 editVid.style.display = 'none';
-                prevVid.style.display = 'none';
-                
                 editImg.style.display = 'block';
-                prevImg.style.display = 'block';
-                
                 editImg.src = url;
-                prevImg.src = url;
-                
-                editImg.onload = updateCrosshair;
+                editImg.onload = () => updateCropMask(editImg.naturalWidth, editImg.naturalHeight);
             }
 
             document.getElementById('editor').style.display = 'flex';
-            updateCrosshair(); // Initiale Position setzen
         }
 
         function setFocus(event) {
-            // Wir berechnen die Position relativ zum Container (.editor-source-wrapper)
-            const wrapper = event.currentTarget;
+            const wrapper = document.getElementById('editor-wrapper');
             const rect = wrapper.getBoundingClientRect();
             
-            // Verhindern von Werten außerhalb (0-100%)
             let x = ((event.clientX - rect.left) / rect.width) * 100;
             let y = ((event.clientY - rect.top) / rect.height) * 100;
             
             currentX = Math.round(Math.max(0, Math.min(100, x)));
             currentY = Math.round(Math.max(0, Math.min(100, y)));
             
-            updateCrosshair();
+            // Maske neu berechnen basierend auf dem Bild/Video, das gerade sichtbar ist
+            if(currentType === 'video') {
+                const v = document.getElementById('editor-video');
+                updateCropMask(v.videoWidth, v.videoHeight);
+            } else {
+                const i = document.getElementById('editor-img');
+                updateCropMask(i.naturalWidth, i.naturalHeight);
+            }
         }
 
-        function updateCrosshair() {
-            // 1. Roten Punkt verschieben
-            const point = document.getElementById('focus-point');
-            point.style.left = currentX + '%'; 
-            point.style.top = currentY + '%';
-
-            // 2. Live Vorschau aktualisieren (Magie!)
-            // Wir wenden die Koordinaten direkt auf das object-position der Vorschau an
-            const posString = `${currentX}% ${currentY}%`;
+        function updateCropMask(mediaW, mediaH) {
+            const box = document.getElementById('crop-box');
+            const mediaRatio = mediaW / mediaH;
             
-            if (currentType === 'video') {
-                document.getElementById('preview-video').style.objectPosition = posString;
+            let boxW, boxH;
+
+            // Logik: Wir berechnen, wie groß die Box relativ zum Container (Wrapper) sein muss,
+            // um das Ziel-Verhältnis (3 / 3.5) einzuhalten.
+            
+            if (mediaRatio > TARGET_RATIO) {
+                // Bild ist breiter als Ziel (Beschnitt links/rechts)
+                // Höhe ist voll (100%), Breite passt sich an
+                boxH = 100;
+                boxW = (mediaH * TARGET_RATIO / mediaW) * 100;
             } else {
-                document.getElementById('preview-img').style.objectPosition = posString;
+                // Bild ist höher als Ziel (Beschnitt oben/unten)
+                // Breite ist voll (100%), Höhe passt sich an
+                boxW = 100;
+                boxH = (mediaW / TARGET_RATIO / mediaH) * 100;
             }
+
+            // Position berechnen basierend auf currentX/Y (Fokuspunkt)
+            // CSS object-position Logik simulieren:
+            // "0% 50%" heißt ganz links, "100% 50%" heißt ganz rechts.
+            // Der verfügbare "Spielraum" ist (100% - boxW) bzw. (100% - boxH).
+            
+            const availableX = 100 - boxW;
+            const availableY = 100 - boxH;
+            
+            const left = (currentX / 100) * availableX;
+            const top = (currentY / 100) * availableY;
+
+            box.style.width = boxW + '%';
+            box.style.height = boxH + '%';
+            box.style.left = left + '%';
+            box.style.top = top + '%';
         }
 
         function saveCrop() {
@@ -367,9 +377,7 @@
         }
         function closeEditor() { 
             document.getElementById('editor').style.display = 'none'; 
-            // Videos stoppen um Ressouren zu sparen
             document.getElementById('editor-video').pause();
-            document.getElementById('preview-video').pause();
         }
         
         function uploadFiles(files) {
