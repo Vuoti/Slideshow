@@ -120,22 +120,52 @@
             }
             container.innerHTML = ''; // HTML entfernen
         }
+// --- RAM CLEANUP HELPER ---
+        function cleanupContainer(container) {
+            const video = container.querySelector('video');
+            if (video) {
+                video.pause();
+                video.removeAttribute('src');
+                video.load();
+            }
+            container.innerHTML = '';
+        }
+
+        // Variable, um das aktuell gezeigte Bild zu merken (für Anti-Flicker)
+        var lastItemSignature = "";
 
         function playNext() {
             if (playlist.length === 0) { setTimeout(playNext, 2000); return; }
 
             let nextIndex = (currentIndex + 1) % playlist.length;
+            // Fallback falls Liste kürzer wurde
             if (nextIndex >= playlist.length) nextIndex = 0; 
+            
+            // Wenn nur 1 Bild da ist (Fixiert oder Newest=1), immer Index 0
             if (playlist.length === 1) nextIndex = 0;
 
             var item = playlist[nextIndex];
+            
+            // --- ANTI FLACKER LOGIK ---
+            // Erstelle eine Signatur aus URL und Crop-Position
+            var currentSignature = item.url + "|" + item.focus_x + "|" + item.focus_y;
+            
+            // Wenn nur 1 Bild in der Playlist ist UND es ist exakt das gleiche wie gerade eben:
+            // MACH NICHTS (Kein Fade, kein DOM Update). Warte einfach.
+            if (playlist.length === 1 && currentSignature === lastItemSignature) {
+                // Wir prüfen in 2 Sekunden nochmal (falls Config sich ändert)
+                setTimeout(playNext, 2000);
+                return;
+            }
+
+            // Neues Bild -> Weitermachen
+            lastItemSignature = currentSignature;
             currentIndex = nextIndex;
 
             var nextContainerId = (activeContainerId === 'container1') ? 'container2' : 'container1';
             var nextDiv = document.getElementById(nextContainerId);
             var currentDiv = document.getElementById(activeContainerId);
             
-            // WICHTIG: Speicher aufräumen bevor wir Neues reinladen
             cleanupContainer(nextDiv);
             
             var el;
@@ -145,15 +175,20 @@
                 el = document.createElement('video');
                 el.src = "/static/images/" + item.url;
                 el.muted = true; el.autoplay = true; el.playsInline = true;
-                el.style.objectPosition = "center center"; 
+                el.style.objectPosition = "center center"; // Videos werden meist mittig gezeigt oder cropped?
+                // Falls du Videos auch croppen willst wie Bilder:
+                // el.style.objectPosition = item.focus_x + "% " + item.focus_y + "%"; 
+                
                 el.oncanplay = () => {
-                   nextDiv.classList.add('visible'); currDiv.classList.remove('visible');
+                   nextDiv.classList.add('visible'); 
+                   currentDiv.classList.remove('visible');
                    activeContainerId = nextDiv.id;
                    el.play().catch(e=>console.log(e));
                 };
                 
                 if (playlist.length === 1) {
                     el.loop = true;
+                    // Trotzdem prüfen wir später auf Änderungen
                     setTimeout(playNext, 60000); 
                 } else {
                     el.onended = playNext;
@@ -164,7 +199,8 @@
                 el.src = "/static/images/" + item.url;
                 el.style.objectPosition = item.focus_x + "% " + item.focus_y + "%";
                 el.onload = () => {
-                   nextDiv.classList.add('visible'); currDiv.classList.remove('visible');
+                   nextDiv.classList.add('visible'); 
+                   currentDiv.classList.remove('visible');
                    activeContainerId = nextDiv.id;
                    setTimeout(playNext, duration);
                 };
@@ -172,7 +208,6 @@
             }
             nextDiv.appendChild(el);
         }
-
         fetchConfigAndImages();
         setInterval(fetchConfigAndImages, 10000); 
         setInterval(updateBrightness, 60000);

@@ -18,7 +18,6 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; }
         h3, h4 { margin-top: 0; }
         
-        /* Layout */
         .container { max-width: 1200px; margin: 0 auto; }
         
         /* Settings Cards */
@@ -31,7 +30,7 @@
         .row { display: flex; gap: 10px; }
         
         /* Buttons */
-        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1em; transition: transform 0.1s; }
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1em; transition: transform 0.05s; }
         .btn:active { transform: scale(0.98); }
         .btn-primary { background: var(--accent); color: white; }
         .btn-success { background: var(--success); color: black; }
@@ -39,18 +38,22 @@
         .btn-upload { border: 2px dashed #555; background: transparent; color: #aaa; margin-bottom: 30px; }
         .btn-upload:hover { border-color: var(--accent); color: var(--accent); }
 
-        /* Grid */
+        /* Grid - Optimiert für Performance und Speed */
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
         .grid-item { 
             position: relative; 
-            aspect-ratio: var(--aspect-ratio); /* Neues Format */
-            border-radius: 8px; overflow: hidden; cursor: pointer; border: 3px solid transparent; transition: 0.2s; background: #000; 
+            aspect-ratio: var(--aspect-ratio); 
+            border-radius: 8px; overflow: hidden; cursor: pointer; 
+            border: 3px solid transparent; 
+            /* SCHNELLERER HOVER: */
+            transition: transform 0.1s ease-out, border-color 0.1s ease-out; 
+            background: #000; 
+            will-change: transform; /* Performance Boost */
         }
-        .grid-item:hover { transform: scale(1.02); border-color: var(--accent); }
+        .grid-item:hover { transform: scale(1.05); border-color: var(--accent); z-index: 10; }
         .grid-item.active-freeze { border-color: var(--success); box-shadow: 0 0 15px var(--success); }
         .grid-item img, .grid-item video { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
         
-        /* Status Bar */
         #freeze-bar { 
             background: var(--accent); color: white; padding: 15px; border-radius: 12px; margin-bottom: 20px; 
             display: none; align-items: center; justify-content: space-between; box-shadow: 0 4px 15px rgba(0,122,255,0.4);
@@ -59,23 +62,41 @@
         /* Editor Modal */
         #editor { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 100; flex-direction: column; align-items: center; justify-content: flex-start; padding: 20px; box-sizing: border-box; overflow-y: auto; }
         
-        /* Editor Bereich */
-        .editor-wrapper { position: relative; max-width: 90vw; max-height: 70vh; margin-bottom: 20px; overflow: hidden; border-radius: 4px; box-shadow: 0 0 20px rgba(0,0,0,0.5); cursor: crosshair; }
+        /* FIX FÜR MOBILE ASPECT RATIO: 
+           display: inline-block + width: fit-content sorgt dafür, 
+           dass der Wrapper exakt so groß ist wie das Bild darin.
+        */
+        .editor-wrapper { 
+            position: relative; 
+            display: inline-block; /* WICHTIG */
+            width: fit-content;    /* WICHTIG */
+            max-width: 100%; 
+            max-height: 70vh; 
+            margin-bottom: 20px; 
+            overflow: hidden; 
+            border-radius: 4px; 
+            box-shadow: 0 0 20px rgba(0,0,0,0.5); 
+            cursor: crosshair; 
+        }
         
-        /* Das Bild/Video im Editor (wird voll angezeigt) */
-        #editor-img, #editor-video { max-width: 100%; max-height: 70vh; display: block; }
+        #editor-img, #editor-video { 
+            display: block; 
+            max-width: 100%; 
+            max-height: 70vh; 
+            /* Verhindert Verzerrung durch CSS */
+            width: auto; 
+            height: auto;
+        }
 
-        /* Die Crop Box (Der helle Bereich) */
         #crop-box {
             position: absolute;
             top: 0; left: 0;
             border: 2px solid var(--success);
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7); /* Der Trick: Alles außerhalb wird dunkel */
-            pointer-events: none; /* Klicks gehen durch zum Wrapper */
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7);
+            pointer-events: none;
             transition: all 0.1s ease-out;
         }
         
-        /* Roter Punkt in der Mitte der Crop Box */
         #focus-indicator {
             position: absolute;
             width: 10px; height: 10px;
@@ -166,7 +187,6 @@
         <div class="editor-wrapper" onclick="setFocus(event)" id="editor-wrapper">
             <img id="editor-img" src="" style="display:none;">
             <video id="editor-video" src="" muted loop playsinline style="display:none;"></video>
-            
             <div id="crop-box">
                 <div id="focus-indicator"></div>
             </div>
@@ -186,13 +206,11 @@
         let currentX = 50; let currentY = 50;
         let globalConfig = {};
         
-        // ZIEL ASPECT RATIO: 3 / 3.5 = 0.85714
         const TARGET_RATIO = 3 / 3.5;
 
         function loadAll() {
             fetch('/api/config').then(r=>r.json()).then(data => {
                 globalConfig = data;
-                // Inputs füllen
                 document.getElementById('durationInput').value = data.duration;
                 document.getElementById('modeInput').value = data.mode;
                 document.getElementById('newestCountInput').value = data.newest_count || 5;
@@ -230,8 +248,8 @@
                     
                     let contentHTML = '';
                     if (item.type === 'video') {
-                        // KEIN Autoplay, KEIN Hover mehr. #t=0.1 erzwingt Vorschaubild von Sekunde 0.1
-                        contentHTML = `<video src="/static/images/${item.url}#t=0.1" preload="metadata" muted playsinline style="object-position: ${item.focus_x}% ${item.focus_y}%"></video>`;
+                        // WIEDER MIT AUTOPLAY
+                        contentHTML = `<video src="/static/images/${item.url}" autoplay muted loop playsinline style="object-position: ${item.focus_x}% ${item.focus_y}%"></video>`;
                     } else {
                         contentHTML = `<img src="/static/images/${item.url}" loading="lazy" style="object-position: ${item.focus_x}% ${item.focus_y}%">`;
                     }
@@ -297,18 +315,23 @@
                 editVid.style.display = 'block';
                 editVid.src = url;
                 editVid.play(); 
+                // Metadata warten für korrekte Größe
                 editVid.onloadedmetadata = () => updateCropMask(editVid.videoWidth, editVid.videoHeight);
+                // Falls schon geladen (Cache):
+                if(editVid.readyState >= 1) updateCropMask(editVid.videoWidth, editVid.videoHeight);
             } else {
                 editVid.style.display = 'none';
                 editImg.style.display = 'block';
                 editImg.src = url;
                 editImg.onload = () => updateCropMask(editImg.naturalWidth, editImg.naturalHeight);
+                if(editImg.complete) updateCropMask(editImg.naturalWidth, editImg.naturalHeight);
             }
 
             document.getElementById('editor').style.display = 'flex';
         }
 
         function setFocus(event) {
+            // Umrechnung auf Bild-Größe
             const wrapper = document.getElementById('editor-wrapper');
             const rect = wrapper.getBoundingClientRect();
             
@@ -318,7 +341,6 @@
             currentX = Math.round(Math.max(0, Math.min(100, x)));
             currentY = Math.round(Math.max(0, Math.min(100, y)));
             
-            // Maske neu berechnen basierend auf dem Bild/Video, das gerade sichtbar ist
             if(currentType === 'video') {
                 const v = document.getElementById('editor-video');
                 updateCropMask(v.videoWidth, v.videoHeight);
@@ -330,30 +352,22 @@
 
         function updateCropMask(mediaW, mediaH) {
             const box = document.getElementById('crop-box');
+            // Schutz vor Division durch 0
+            if(!mediaW || !mediaH) return;
+
             const mediaRatio = mediaW / mediaH;
-            
             let boxW, boxH;
 
-            // Logik: Wir berechnen, wie groß die Box relativ zum Container (Wrapper) sein muss,
-            // um das Ziel-Verhältnis (3 / 3.5) einzuhalten.
-            
             if (mediaRatio > TARGET_RATIO) {
-                // Bild ist breiter als Ziel (Beschnitt links/rechts)
-                // Höhe ist voll (100%), Breite passt sich an
+                // Bild ist breiter
                 boxH = 100;
                 boxW = (mediaH * TARGET_RATIO / mediaW) * 100;
             } else {
-                // Bild ist höher als Ziel (Beschnitt oben/unten)
-                // Breite ist voll (100%), Höhe passt sich an
+                // Bild ist höher
                 boxW = 100;
                 boxH = (mediaW / TARGET_RATIO / mediaH) * 100;
             }
 
-            // Position berechnen basierend auf currentX/Y (Fokuspunkt)
-            // CSS object-position Logik simulieren:
-            // "0% 50%" heißt ganz links, "100% 50%" heißt ganz rechts.
-            // Der verfügbare "Spielraum" ist (100% - boxW) bzw. (100% - boxH).
-            
             const availableX = 100 - boxW;
             const availableY = 100 - boxH;
             
